@@ -3,9 +3,9 @@ package httpd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jiorry/yundata.com/cache"
-	"github.com/jiorry/yundata.com/db"
-	"github.com/jiorry/yundata.com/log"
+	"github.com/jiorry/gos/cache"
+	"github.com/jiorry/gos/db"
+	"github.com/jiorry/gos/log"
 	"io"
 	"net"
 	"net/http"

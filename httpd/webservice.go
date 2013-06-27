@@ -2,7 +2,7 @@ package httpd
 
 import (
 	"encoding/json"
-	"github.com/jiorry/yundata.com/log"
+	"github.com/jiorry/gos/log"
 )
 
 type WSParams struct {

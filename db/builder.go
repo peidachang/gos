@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/gob"
 	"fmt"
-	"github.com/jiorry/yundata.com/cache"
-	"github.com/jiorry/yundata.com/log"
-	"github.com/jiorry/yundata.com/util"
+	"github.com/jiorry/gos/cache"
+	"github.com/jiorry/gos/log"
+	"github.com/jiorry/gos/util"
 	"strings"
 	"time"
 )

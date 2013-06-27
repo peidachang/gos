@@ -3,8 +3,8 @@ package db
 import (
 	"bytes"
 	"database/sql"
-	"github.com/jiorry/yundata.com/db/drivers"
-	"github.com/jiorry/yundata.com/log"
+	"github.com/jiorry/gos/db/drivers"
+	"github.com/jiorry/gos/log"
 	"io/ioutil"
 	"strings"
 	"time"

@@ -3,7 +3,7 @@ package cache
 import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"github.com/jiorry/yundata.com/log"
+	"github.com/jiorry/gos/log"
 	"strconv"
 	"time"
 )

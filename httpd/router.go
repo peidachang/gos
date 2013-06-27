@@ -1,7 +1,7 @@
 package httpd
 
 import (
-	"github.com/jiorry/yundata.com/log"
+	"github.com/jiorry/gos/log"
 	"html"
 	"reflect"
 	"regexp"

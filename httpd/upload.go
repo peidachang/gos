@@ -2,7 +2,7 @@ package httpd
 
 import (
 	"errors"
-	"github.com/jiorry/yundata.com/util"
+	"github.com/jiorry/gos/util"
 	"io"
 	"mime/multipart"
 	"os"
