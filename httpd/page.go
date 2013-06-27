@@ -2,40 +2,16 @@ package httpd
 
 import (
 	"github.com/jiorry/gos/log"
-	"io"
 	"os"
 )
+
+var empty = &EmptyRender{}
 
 type Page struct {
 	Ctx        *Context
 	LayoutData *LayoutData
 	Data       interface{}
-
-	TopRender     IRender
-	HeaderRender  IRender
-	ContextRender IRender
-	FooterRender  IRender
-	BottomRender  IRender
-}
-
-type LayoutData struct {
-	View       string
-	Title      string
-	Head       []string
-	Js         []string
-	Css        []string
-	Timestamp  string
-	JsPosition string // head or end
-}
-
-func (this *LayoutData) AddHeadItem(str string) {
-	this.Head = append(this.Head, str)
-}
-func (this *LayoutData) AddJs(str string) {
-	this.Head = append(this.Js, str)
-}
-func (this *LayoutData) AddCss(str string) {
-	this.Head = append(this.Css, str)
+	Layout     *AppLayout
 }
 
 type IPage interface {
@@ -61,16 +37,22 @@ func CachePageToFile(pages []IPage) {
 func (this *Page) Init() {
 	this.LayoutData = DefaultData()
 	this.Data = make(map[string]interface{})
+
+	this.Layout = &AppLayout{
+		topRender:     empty,
+		headerRender:  empty,
+		contextRender: empty,
+		footerRender:  empty,
+		bottomRender:  empty}
 }
 func (this *Page) SetContext(ct *Context) {
 	this.Ctx = ct
 }
 
 func (this *Page) RenderPage() {
-	applayout := this.BuildLayout(this.Ctx.ResponseWriter)
 	// If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
-	this.Ctx.ResponseWriter.WriteHeader(200)
-	applayout.RenderLayout(this.Ctx.ResponseWriter)
+	// this.Ctx.ResponseWriter.WriteHeader(200)
+	this.BuildLayout().RenderLayout(this.Ctx.ResponseWriter)
 }
 
 func (this *Page) ToFile() {
@@ -78,54 +60,42 @@ func (this *Page) ToFile() {
 	if err != nil {
 		log.App.Fatalln(err)
 	}
-	applayout := this.BuildLayout(out)
-	applayout.RenderLayout(out)
+	this.BuildLayout().RenderLayout(out)
 }
 
-func (this *Page) BuildLayout(writer io.Writer) *AppLayout {
-	empty := &EmptyRender{}
-	headLayout := &HeadLayout{Title: this.LayoutData.Title,
-		HeadItemRender: empty, JsRender: empty, CssRender: empty}
-
-	app := &AppLayout{HeadLayout: headLayout,
-		TopRender: empty, HeaderRender: empty, ContextRender: empty,
-		FooterRender: empty, BottomRender: empty, JsBottomRender: empty}
+func (this *Page) BuildLayout() *AppLayout {
+	headLayout := &HeadLayout{
+		JsPosition:     this.LayoutData.JsPosition,
+		Title:          this.LayoutData.Title,
+		HeadItemRender: empty,
+		JsRender:       empty,
+		CssRender:      empty}
 
 	if len(this.LayoutData.Head) > 0 {
 		headLayout.HeadItemRender = &HeadItemRender{
-			Data:   this.LayoutData.Head,
-			Writer: writer}
+			Data: this.LayoutData.Head}
 	}
 
 	if len(this.LayoutData.Css) > 0 {
 		headLayout.CssRender = &CssRender{
 			Data:      this.LayoutData.Css,
-			Timestamp: this.LayoutData.Timestamp,
-			Writer:    writer}
+			Timestamp: this.LayoutData.Timestamp}
 	}
 
 	if len(this.LayoutData.Js) > 0 {
-		if this.LayoutData.JsPosition == "head" {
-			headLayout.JsRender = &JsRender{
-				Data:      this.LayoutData.Js,
-				Timestamp: this.LayoutData.Timestamp,
-				Writer:    writer}
-		} else {
-			app.JsBottomRender = &JsRender{
-				Data:      this.LayoutData.Js,
-				Timestamp: this.LayoutData.Timestamp,
-				Writer:    writer}
-		}
+		headLayout.JsRender = &JsRender{
+			Data:      this.LayoutData.Js,
+			Timestamp: this.LayoutData.Timestamp}
 	}
+	this.Layout.SetHeadLayout(headLayout)
 
 	if len(this.LayoutData.View) > 0 {
-		app.ContextRender = &TemplateRender{
-			View:   this.LayoutData.View,
-			Data:   this.Data,
-			Writer: writer}
+		this.Layout.SetContext(&TemplateRender{
+			View: this.LayoutData.View,
+			Data: this.Data})
 	}
 
-	return app
+	return this.Layout
 }
 
 func (this *Page) Before() {

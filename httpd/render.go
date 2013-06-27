@@ -6,35 +6,33 @@ import (
 )
 
 type IRender interface {
-	render()
+	render(io.Writer)
 }
 
 // EmptyRender
 type EmptyRender struct{}
 
-func (this *EmptyRender) render() {}
+func (this *EmptyRender) render(w io.Writer) {}
 
 // TemplateRender
 type TemplateRender struct {
-	View   string
-	Data   interface{}
-	Writer io.Writer
+	View string
+	Data interface{}
 }
 
-func (this *TemplateRender) render() {
+func (this *TemplateRender) render(w io.Writer) {
 	tmpl, _ := template.ParseFiles("code/template" + Theme.GetTemplate() + this.View + ".htm")
-	tmpl.Execute(this.Writer, this.Data)
+	tmpl.Execute(w, this.Data)
 }
 
 // HeadRender
 type HeadItemRender struct {
-	Data   []string
-	Writer io.Writer
+	Data []string
 }
 
-func (this *HeadItemRender) render() {
+func (this *HeadItemRender) render(w io.Writer) {
 	for _, v := range this.Data {
-		this.Writer.Write([]byte(v + "\n"))
+		w.Write([]byte(v + "\n"))
 	}
 }
 
@@ -42,12 +40,11 @@ func (this *HeadItemRender) render() {
 type JsRender struct {
 	Timestamp string
 	Data      []string
-	Writer    io.Writer
 }
 
-func (this *JsRender) render() {
+func (this *JsRender) render(w io.Writer) {
 	for _, v := range this.Data {
-		this.Writer.Write([]byte("<script src=\"" + StaticUrl + Theme.GetJs() + v + "?ts=" + this.Timestamp + "\"></script>\n"))
+		w.Write([]byte("<script src=\"" + StaticUrl + Theme.GetJs() + v + "?ts=" + this.Timestamp + "\"></script>\n"))
 	}
 }
 
@@ -55,12 +52,11 @@ func (this *JsRender) render() {
 type CssRender struct {
 	Timestamp string
 	Data      []string
-	Writer    io.Writer
 }
 
-func (this *CssRender) render() {
+func (this *CssRender) render(w io.Writer) {
 	for _, v := range this.Data {
-		this.Writer.Write([]byte("<link href=\"" + StaticUrl + Theme.GetCss() + v + "?ts=\"" + this.Timestamp + " rel=\"stylesheet\"/>\n"))
+		w.Write([]byte("<link href=\"" + StaticUrl + Theme.GetCss() + v + "?ts=\"" + this.Timestamp + " rel=\"stylesheet\"/>\n"))
 	}
 }
 
@@ -69,11 +65,10 @@ type TextRender struct {
 	Name   string
 	Source string
 	Data   map[string]interface{}
-	Writer io.Writer
 }
 
-func (this *TextRender) render() {
+func (this *TextRender) render(w io.Writer) {
 
 	tmpl, _ := template.New(this.Name).Parse(this.Source)
-	tmpl.Execute(this.Writer, this.Data)
+	tmpl.Execute(w, this.Data)
 }
