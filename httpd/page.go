@@ -56,7 +56,7 @@ func (this *Page) RenderPage() {
 }
 
 func (this *Page) ToFile() {
-	out, err := os.OpenFile("var/html/"+this.LayoutData.View+".html", os.O_TRUNC|os.O_CREATE, 0)
+	out, err := os.OpenFile(httpServer.StaticDir+"/"+this.LayoutData.View+".html", os.O_TRUNC|os.O_CREATE, 0)
 	if err != nil {
 		log.App.Fatalln(err)
 	}
@@ -78,14 +78,12 @@ func (this *Page) BuildLayout() *AppLayout {
 
 	if len(this.LayoutData.Css) > 0 {
 		headLayout.CssRender = &CssRender{
-			Data:      this.LayoutData.Css,
-			Timestamp: this.LayoutData.Timestamp}
+			Data: this.LayoutData.Css}
 	}
 
 	if len(this.LayoutData.Js) > 0 {
 		headLayout.JsRender = &JsRender{
-			Data:      this.LayoutData.Js,
-			Timestamp: this.LayoutData.Timestamp}
+			Data: this.LayoutData.Js}
 	}
 	this.Layout.SetHeadLayout(headLayout)
 
@@ -101,11 +99,11 @@ func (this *Page) BuildLayout() *AppLayout {
 func (this *Page) Before() {
 
 }
-func (this *Page) Get() {
-
+func (this *Page) Get() bool {
+	return true
 }
-func (this *Page) Post() {
-
+func (this *Page) Post() bool {
+	return true
 }
 func (this *Page) After() {
 

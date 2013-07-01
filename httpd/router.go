@@ -87,8 +87,8 @@ func addRouteTo(rule string, clas interface{}, itype int) {
 		p := regReplace.ReplaceAllString(rule, "(\\w+)")
 		regPath, _ = regexp.Compile(p)
 	} else {
-		if !strings.HasSuffix(rule, "/") {
-			rule += "/"
+		if strings.HasSuffix(rule, "/") {
+			rule = strings.TrimSuffix(rule, "/")
 		}
 	}
 
@@ -114,8 +114,8 @@ func addRouteTo(rule string, clas interface{}, itype int) {
 }
 
 func searchPathFrom(path string, fromRoutes []*Route) *RouteMatched {
-	if !strings.HasSuffix(path, "/") {
-		path += "/"
+	if strings.HasSuffix(path, "/") {
+		path = strings.TrimSuffix(path, "/")
 	}
 	for _, route := range fromRoutes {
 		if path == route.Rule {
@@ -131,6 +131,9 @@ func matchRoute(path string) *RouteMatched {
 	for _, route = range routes {
 		if route.Pattern == nil {
 			// string route
+			if strings.HasSuffix(path, "/") {
+				path = strings.TrimSuffix(path, "/")
+			}
 			if path == route.Rule {
 				return &RouteMatched{ClassType: route.ClassType, Params: nil}
 			}

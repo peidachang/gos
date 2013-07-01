@@ -12,12 +12,7 @@ import (
 	"time"
 )
 
-var (
-	emptyRow DataRow
-)
-
 func init() {
-	emptyRow = make(map[string]interface{})
 	gob.Register(DataRow{})
 	gob.Register(DataSet{})
 	gob.Register(time.Time{})
@@ -101,7 +96,7 @@ func (this *QueryBuilder) Cache(expire int) *QueryBuilder {
 }
 
 func (this *QueryBuilder) cachekey() string {
-	return util.MD5(fmt.Sprintf("%v%v%v%v%v", this.field, this.where, this.limit, this.offset, this.order))
+	return util.MD5String(fmt.Sprintf("%v%v%v%v%v", this.field, this.where, this.limit, this.offset, this.order))
 }
 
 func (this *QueryBuilder) parse() string {
@@ -148,8 +143,9 @@ func (this *QueryBuilder) Query() (DataSet, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	cacheSet(key, r, this.expire)
+	if this.cache && cache.IsEnable() {
+		cacheSet(key, r, this.expire)
+	}
 	return r, nil
 }
 
@@ -168,13 +164,24 @@ func (this *QueryBuilder) QueryOne() (DataRow, error) {
 		return nil, err
 	}
 
+	var row DataRow
 	if len(result) > 0 {
-		cacheSet(key, result[0], this.expire)
-		return result[0], nil
+		row = result[0]
+	} else {
+		row = nil
 	}
 
-	cache.Set(key, emptyRow, this.expire)
-	return emptyRow, nil
+	if this.cache && cache.IsEnable() {
+		cache.Set(key, row, this.expire)
+	}
+	return row, nil
+}
+
+func (this *QueryBuilder) Exists(s string, args ...interface{}) (bool, error) {
+	this.where = &parpareParams{s, args}
+	this.field = "1"
+	r, err := this.Query()
+	return len(r) > 0, err
 }
 
 // insert builder

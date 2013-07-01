@@ -14,14 +14,14 @@ type LayoutData struct {
 	JsPosition string // head or end
 }
 
-func (this *LayoutData) AddHeadItem(str string) {
-	this.Head = append(this.Head, str)
+func (this *LayoutData) AddHeadItem(items ...string) {
+	this.Head = append(this.Head, items...)
 }
-func (this *LayoutData) AddJs(str string) {
-	this.Head = append(this.Js, str)
+func (this *LayoutData) AddJs(items ...string) {
+	this.Js = append(this.Js, items...)
 }
-func (this *LayoutData) AddCss(str string) {
-	this.Head = append(this.Css, str)
+func (this *LayoutData) AddCss(items ...string) {
+	this.Css = append(this.Css, items...)
 }
 
 type AppLayout struct {
@@ -73,22 +73,17 @@ func (this *AppLayout) SetHeadLayout(h *HeadLayout) {
 	this.headLayout = h
 }
 func (this *AppLayout) RenderLayout(writer io.Writer) {
-	writer.Write([]byte("<!DOCTYPE HTML>\n"))
-	writer.Write([]byte("<html>\n"))
-
+	writer.Write([]byte("<!DOCTYPE HTML>\n<html>\n"))
 	this.headLayout.RenderLayout(writer)
-
 	writer.Write([]byte("<body>\n"))
 	this.topRender.render(writer)
 	this.headerRender.render(writer)
 	this.contextRender.render(writer)
 	this.footerRender.render(writer)
 	this.bottomRender.render(writer)
-
 	this.headLayout.RenderBottomJs(writer)
-	writer.Write([]byte("</body>\n"))
 
-	writer.Write([]byte("</html>"))
+	writer.Write([]byte("\n</body>\n</html>"))
 }
 
 type HeadLayout struct {
@@ -106,8 +101,7 @@ func (this *HeadLayout) RenderLayout(writer io.Writer) {
 	if this.JsPosition == "head" {
 		this.JsRender.render(writer)
 	}
-	writer.Write([]byte("<title>" + this.Title + "</title>\n"))
-	writer.Write([]byte("</head>\n"))
+	writer.Write([]byte("<title>" + this.Title + "</title>\n</head>\n"))
 }
 
 func (this *HeadLayout) RenderBottomJs(writer io.Writer) {

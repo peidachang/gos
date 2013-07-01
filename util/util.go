@@ -3,9 +3,11 @@ package util
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
 	"hash/crc64"
+	"io"
 	"time"
 )
 
@@ -13,13 +15,19 @@ func NowString() string {
 	return time.Now().Format("2006-01-02 03:04:05")
 }
 
-func Now() int64 {
-	return time.Now().Unix()
+func MD5String(str string) string {
+	return fmt.Sprintf("%x", MD5([]byte(str)))
 }
 
-func MD5(str string) string {
+func MD5(b []byte) []byte {
 	h := md5.New()
-	h.Write([]byte(str))
+	h.Write(b)
+	return h.Sum(nil)
+}
+
+func Sha1(str string) string {
+	h := sha1.New()
+	io.WriteString(h, "abc")
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 

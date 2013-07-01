@@ -38,25 +38,23 @@ func (this *HeadItemRender) render(w io.Writer) {
 
 // JsRender
 type JsRender struct {
-	Timestamp string
-	Data      []string
+	Data []string
 }
 
 func (this *JsRender) render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<script src=\"" + StaticUrl + Theme.GetJs() + v + "?ts=" + this.Timestamp + "\"></script>\n"))
+		w.Write([]byte("<script src=\"" + StaticUrl + Theme.GetJs() + v + httpServer.Timestamp + "\"></script>\n"))
 	}
 }
 
 // CssRender
 type CssRender struct {
-	Timestamp string
-	Data      []string
+	Data []string
 }
 
 func (this *CssRender) render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<link href=\"" + StaticUrl + Theme.GetCss() + v + "?ts=\"" + this.Timestamp + " rel=\"stylesheet\"/>\n"))
+		w.Write([]byte("<link href=\"" + StaticUrl + Theme.GetCss() + v + httpServer.Timestamp + "\" rel=\"stylesheet\"/>\n"))
 	}
 }
 

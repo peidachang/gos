@@ -23,6 +23,7 @@ type HttpServer struct {
 
 	StaticDir string
 	CacheDir  string
+	Timestamp string
 
 	EnablePing   bool
 	EnableUpload bool
@@ -45,7 +46,7 @@ func init() {
 		Addr:         "",
 		Port:         8800,
 		StaticDir:    "static",
-		CacheDir:     "var/html",
+		CacheDir:     "static",
 		PprofOn:      false,
 		EnableGzip:   false,
 		EnablePing:   false,
@@ -57,15 +58,9 @@ func init() {
 	HomeUrl = "/"
 	StaticUrl = "/"
 
-	if _, err := os.Stat("var"); err != nil {
+	if _, err := os.Stat("code/log"); err != nil {
 		if os.IsNotExist(err) {
-			os.Mkdir("var", os.ModeDir)
-		}
-	}
-
-	if _, err := os.Stat("var/html"); err != nil {
-		if os.IsNotExist(err) {
-			os.Mkdir("var/html", os.ModeDir)
+			os.Mkdir("code/log", os.ModeDir)
 		}
 	}
 
@@ -80,7 +75,7 @@ func Init() {
 	RunMode = conf.GetRunMode()
 
 	names := []string{}
-	log.Init("var/log/", names, RunMode)
+	log.Init("code/log/", names, RunMode)
 
 	if appConf.IsSet("home_url") {
 		HomeUrl = appConf.GetString("home_url")
@@ -92,6 +87,15 @@ func Init() {
 	if httpConf.IsSet("static") {
 		httpServer.StaticDir = httpConf.GetString("static")
 	}
+
+	if httpConf.IsSet("cache_dir") {
+		httpServer.CacheDir = httpConf.GetString("cache_dir")
+	}
+
+	if httpConf.IsSet("timestamp") {
+		httpServer.Timestamp = "?ts=" + httpConf.GetString("timestamp")
+	}
+
 	if RunMode == "dev" {
 		log.Level = 10
 		fmt.Println("Server is run in Development Mode")
@@ -226,13 +230,13 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 
 	ctx := buildContext(rw, req, routeMatched)
 
-	if len(ctx.Params["json"]) == 0 {
+	if len(req.PostForm["json"]) == 0 {
 		MyErr(0, "miss parameters!").Write(rw)
 		return
 	}
 
 	data := &WSParams{}
-	if err := json.Unmarshal([]byte(ctx.Params["json"]), data); err != nil {
+	if err := json.Unmarshal([]byte(req.PostForm["json"][0]), data); err != nil {
 		MyErr(0, err.Error()).Write(rw)
 		//ctx.Exit(500, "decode data error")
 		return
@@ -252,11 +256,10 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 }
 
 func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
-	log.App.Info("page:", req.URL.Path)
-	// req.ParseMultipartForm(1 << 26)
+	log.App.Info(req.URL.Path)
+
 	var routeMatched *RouteMatched
 	if routeMatched = MatchRoute(req.URL.Path); routeMatched == nil {
-
 		if strings.ContainsRune(req.URL.Path, '.') {
 			http.ServeFile(rw, req, httpServer.StaticDir+req.URL.Path)
 		} else {
@@ -273,27 +276,29 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 	prt.MethodByName("Init").Call(nil)
 
 	prt.MethodByName("Before").Call(nil)
+
+	var val []reflect.Value
 	if req.Method == "POST" {
-		prt.MethodByName("Post").Call(nil)
+		val = prt.MethodByName("Post").Call(nil)
+
 	} else {
-		prt.MethodByName("Get").Call(nil)
+		val = prt.MethodByName("Get").Call(nil)
 	}
+	if len(val) > 0 && !val[0].Bool() {
+		return
+	}
+
 	prt.MethodByName("After").Call(nil)
 	prt.MethodByName("RenderPage").Call(nil)
 }
 
 func buildContext(rw http.ResponseWriter, req *http.Request, routeMatched *RouteMatched) *Context {
-	params := routeMatched.Params
 
-	if params == nil {
-		params = make(map[string]string)
+	if req.Method == "POST" {
+		req.ParseForm()
 	}
 
-	values := req.URL.Query()
-	for k, v := range values {
-		params[k] = v[0]
-	}
-	return &Context{ResponseWriter: rw, Request: req, Params: params}
+	return &Context{ResponseWriter: rw, Request: req, RouterParams: routeMatched.Params}
 }
 
 func MyErr(code int, message string) *MyError {
@@ -317,6 +322,13 @@ func (this *MyError) WriteAndLog(w io.Writer) *MyError {
 	return this
 }
 
+func (this *MyError) Data() map[string]interface{} {
+	m := make(map[string]interface{})
+	m["code"] = this.Code
+	m["message"] = this.Message
+	m["iserror"] = true
+	return m
+}
 func (this *MyError) String() string {
 	return fmt.Sprintf("{\"code\":%d,\"message\":\"%s\", \"iserror\": true}", this.Code, this.Message)
 }

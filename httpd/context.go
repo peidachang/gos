@@ -1,7 +1,6 @@
 package httpd
 
 import (
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -11,22 +10,24 @@ import (
 
 type Context struct {
 	ResponseWriter http.ResponseWriter
+	RouterParams   map[string]string
 	Request        *http.Request
-	Params         map[string]string
 }
 
 func (ctx *Context) WriteString(content string) {
 	ctx.ResponseWriter.Write([]byte(content))
 }
 
-func (ctx *Context) Exit(status int, body string) {
-	ctx.ResponseWriter.WriteHeader(status)
+func (ctx *Context) Exit(code int, body string) {
+	ctx.ResponseWriter.WriteHeader(code)
 	ctx.ResponseWriter.Write([]byte(body))
 }
 
-func (ctx *Context) Redirect(status int, url_ string) {
-	ctx.ResponseWriter.Header().Set("Location", url_)
-	ctx.ResponseWriter.WriteHeader(status)
+func (ctx *Context) Redirect(urlStr string) {
+	// ctx.ResponseWriter.Header().Set("Location", urlStr)
+	// ctx.ResponseWriter.WriteHeader(302)
+
+	http.Redirect(ctx.ResponseWriter, ctx.Request, urlStr, http.StatusSeeOther)
 }
 
 func (ctx *Context) NotModified() {
@@ -38,8 +39,6 @@ func (ctx *Context) NotFound(message string) {
 	ctx.ResponseWriter.Write([]byte(message))
 }
 
-//Sets the content type by extension, as defined in the mime package.
-//For example, ctx.ContentType("json") sets the content-type to "application/json"
 func (ctx *Context) ContentType(ext string) {
 	ctype := mime.TypeByExtension(ext)
 
@@ -56,17 +55,19 @@ func (ctx *Context) SetHeader(hdr string, val string, unique bool) {
 	}
 }
 
-//Sets a cookie -- duration is the amount of time in seconds. 0 = forever
-func (ctx *Context) SetCookie(name string, value string, age int64) {
-	var utctime time.Time
-	if age == 0 {
-		// 2^31 - 1 seconds (roughly 2038)
-		utctime = time.Unix(2147483647, 0)
-	} else {
-		utctime = time.Unix(time.Now().Unix()+age, 0)
+func (ctx *Context) SetCookie(name string, value string, age int64, path string, domain string) {
+	var expires time.Time
+	if age > 0 {
+		expires = time.Unix(time.Now().Unix()+age, 0)
 	}
-	cookie := fmt.Sprintf("%s=%s; Expires=%s; Path=/", name, value, webTime(utctime))
-	ctx.SetHeader("Set-Cookie", cookie, true)
+	cookie := &http.Cookie{
+		Name:    name,
+		Value:   value,
+		Path:    path,
+		Domain:  domain,
+		Expires: expires,
+	}
+	http.SetCookie(ctx.ResponseWriter, cookie)
 }
 
 func webTime(t time.Time) string {
