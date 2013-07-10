@@ -79,13 +79,13 @@ func (this *QueryBuilder) Order(s string) *QueryBuilder {
 	return this
 }
 
-func (this *QueryBuilder) Limit(s int) *QueryBuilder {
-	this.limit = s
+func (this *QueryBuilder) Limit(n int) *QueryBuilder {
+	this.limit = n
 	return this
 }
 
-func (this *QueryBuilder) Offset(s int) *QueryBuilder {
-	this.offset = s
+func (this *QueryBuilder) Offset(n int) *QueryBuilder {
+	this.offset = n
 	return this
 }
 
@@ -121,7 +121,7 @@ func (this *QueryBuilder) parse() string {
 		order = " order by " + this.order
 	}
 
-	return "select " + sel + " from " + this.table + conditions + limitoffset + order
+	return "select " + sel + " from " + this.table + conditions + order + limitoffset
 }
 
 func (this *QueryBuilder) Query() (DataSet, error) {
@@ -150,16 +150,7 @@ func (this *QueryBuilder) Query() (DataSet, error) {
 }
 
 func (this *QueryBuilder) QueryOne() (DataRow, error) {
-	var key string
-
-	if this.cache && cache.IsEnable() {
-		key = this.cachekey()
-		if exi, _ := cache.Exists(key); exi {
-			return cacheGetDBRow(key)
-		}
-	}
-
-	result, err := this.GetDatabase().QueryPrepare(this.parse(), this.where.args...)
+	result, err := this.Query()
 	if err != nil {
 		return nil, err
 	}
@@ -169,10 +160,6 @@ func (this *QueryBuilder) QueryOne() (DataRow, error) {
 		row = result[0]
 	} else {
 		row = nil
-	}
-
-	if this.cache && cache.IsEnable() {
-		cache.Set(key, row, this.expire)
 	}
 	return row, nil
 }
@@ -203,7 +190,6 @@ func (this *InsertBuilder) parse(data DataRow) (code string, values []interface{
 
 func (this *InsertBuilder) Insert(row DataRow) (sql.Result, error) {
 	code, args := this.parse(row)
-
 	return this.GetDatabase().ExecPrepare(code, args...)
 }
 
@@ -216,6 +202,7 @@ func (this *InsertBuilder) InsertM(rows DataSet) {
 // Update builder
 type UpdateBuilder struct {
 	table string
+	where *parpareParams
 	builderBase
 }
 
@@ -224,21 +211,24 @@ func (this *UpdateBuilder) Table(t string) *UpdateBuilder {
 	return this
 }
 
-func (this *UpdateBuilder) Update(data DataRow, cond string, args ...interface{}) (sql.Result, error) {
+func (this *UpdateBuilder) Where(cond string, args ...interface{}) *UpdateBuilder {
+	this.where = &parpareParams{cond, args}
+	return this
+}
+
+func (this *UpdateBuilder) Update(data DataRow) (sql.Result, error) {
 	keys, values, _ := keyValueList(data)
 	arr := make([]string, len(data))
 	for i, _ := range keys {
 		arr[i] = keys[i] + "=?"
 	}
+	var cond string = ""
+	if this.where != nil {
+		cond = " where " + this.where.code
+		values = append(values, this.where.args...)
+	}
 
-	if cond != "" {
-		cond = " where " + cond
-	}
-	if len(args) > 0 {
-		values = append(values, args...)
-	}
 	code := "update " + this.table + " set " + strings.Join(arr, ",") + cond
-
 	return this.GetDatabase().ExecPrepare(code, values...)
 }
 
@@ -279,7 +269,7 @@ func (this *CounterBuilder) Query(cond string, args ...interface{}) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	return r[0].GetInt("count"), nil
+	return r[0].GetInt64("count"), nil
 }
 
 func keyValueList(data DataRow) (keys []string, values []interface{}, stmts []string) {

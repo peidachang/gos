@@ -82,10 +82,19 @@ func (this *Database) Connect() error {
 
 // Excute query on db prepare mode
 func (this *Database) QueryPrepare(sqlstr string, args ...interface{}) (DataSet, error) {
-	s, _ := this.Conn.Prepare(sqlstr)
+	s, err := this.Conn.Prepare(sqlstr)
+	if err != nil {
+		log.App.Alert(err)
+		log.App.Alert(sqlstr)
+		log.App.Alert(args...)
+		log.App.Stack()
+		return nil, err
+	}
 	rows, err := s.Query(args...)
 	if err != nil {
 		log.App.Alert(err)
+		log.App.Alert(sqlstr)
+		log.App.Alert(args...)
 		log.App.Stack()
 		return nil, err
 	}
@@ -115,6 +124,8 @@ func (this *Database) Query(sqlstr string, args ...interface{}) (DataSet, error)
 
 	if err != nil {
 		log.App.Alert(err)
+		log.App.Alert(sqlstr)
+		log.App.Alert(args...)
 		log.App.Stack()
 		return nil, err
 	}
@@ -135,6 +146,7 @@ func (this *Database) Query(sqlstr string, args ...interface{}) (DataSet, error)
 // Excute sql command on db prepare mode
 // In prepare mode, the sql command will be cached by database
 func (this *Database) ExecPrepare(sqlstr string, args ...interface{}) (sql.Result, error) {
+	log.App.Sql(sqlstr, args)
 	s, _ := this.Conn.Prepare(sqlstr)
 	r, err := s.Exec(args...)
 	if err != nil {
@@ -148,6 +160,7 @@ func (this *Database) ExecPrepare(sqlstr string, args ...interface{}) (sql.Resul
 // Excute sql.
 // If your has more than on sql command, it will only excute the first.
 func (this *Database) Exec(sqlstr string, args ...interface{}) (sql.Result, error) {
+	log.App.Sql(sqlstr, args)
 	r, err := this.Conn.Exec(sqlstr, args...)
 	if err != nil {
 		log.App.Alert("db exec error:", err, "\n", "sql:"+sqlstr+"|")
@@ -248,12 +261,23 @@ func DatabaseCount() int {
 type DataRow map[string]interface{}
 type DataSet []DataRow
 
+func (this DataRow) IsSet(key string) bool {
+	_, ok := this[key]
+	return ok
+}
 func (this DataRow) GetString(field string) string {
+	if this[field] == nil {
+		return ""
+	}
 	return this[field].(string)
 }
 
-func (this DataRow) GetInt(field string) int64 {
+func (this DataRow) GetInt64(field string) int64 {
 	return this[field].(int64)
+}
+
+func (this DataRow) GetInt(field string) int {
+	return this[field].(int)
 }
 
 func (this DataRow) GetFloat(field string) float64 {
@@ -261,6 +285,9 @@ func (this DataRow) GetFloat(field string) float64 {
 }
 
 func (this DataRow) GetTime(field string) time.Time {
+	if this[field] == nil {
+		return time.Unix(0, 0)
+	}
 	return this[field].(time.Time)
 }
 

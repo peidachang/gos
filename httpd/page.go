@@ -1,40 +1,63 @@
 package httpd
 
 import (
+	"bytes"
 	"github.com/jiorry/gos/log"
+	"github.com/jiorry/gos/util"
+	"net/http"
 	"os"
+	"reflect"
 )
 
 var empty = &EmptyRender{}
 
+const (
+	CACHE_NOT_FOUND int = 0
+	CACHE_FOUND     int = 1
+	CACHE_DISABLED  int = -1
+)
+
+type PageCache struct {
+	Type   string //none, file, cache
+	Expire int64
+}
 type Page struct {
-	Ctx        *Context
-	LayoutData *LayoutData
-	Data       interface{}
-	Layout     *AppLayout
+	RequireAuth bool
+	Cache       *PageCache
+	Ctx         *Context
+	LayoutData  *LayoutData
+	Data        interface{}
+	Layout      *AppLayout
 }
 
 type IPage interface {
-	Init()
-	ToFile()
+	ToStaticFile()
 }
 
 func DefaultData() *LayoutData {
 	p := &LayoutData{JsPosition: "head"}
 	p.Head = []string{
 		`<meta charset="utf-8">`,
-		`<script type="text/javascript">function addLoadEvent(func){var oldonload=window.myonload;if(func && typeof oldonload!="function")window.myonload=func;else{window.myonload=function(){if(oldonload) oldonload();if(func) func()}}}</script>`}
+		`<script type="text/javascript">function addLoadFunction(func){var oldonload=window.onload;if(func && typeof oldonload!="function")window.onload=func;else{window.onload=function(){if(oldonload) oldonload();if(func) func()}}}</script>`}
 	return p
 }
 
-func CachePageToFile(pages []IPage) {
+func StaticFiles(pages []IPage) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.App.Err(err)
+		}
+	}()
+
 	for _, p := range pages {
-		p.Init()
-		p.ToFile()
+		v := reflect.ValueOf(p)
+		v.MethodByName("Init").Call(nil)
+		p.ToStaticFile()
 	}
 }
 
 func (this *Page) Init() {
+	this.Cache = &PageCache{"none", 0}
 	this.LayoutData = DefaultData()
 	this.Data = make(map[string]interface{})
 
@@ -55,12 +78,79 @@ func (this *Page) RenderPage() {
 	this.BuildLayout().RenderLayout(this.Ctx.ResponseWriter)
 }
 
-func (this *Page) ToFile() {
-	out, err := os.OpenFile(httpServer.StaticDir+"/"+this.LayoutData.View+".html", os.O_TRUNC|os.O_CREATE, 0)
+func (this *Page) CheckPageCache() int {
+	if RunMode != "pro" {
+		return CACHE_DISABLED
+	}
+
+	filename := "var/cache" + this.Ctx.Request.RequestURI + ".html"
+	switch this.Cache.Type {
+	case "file":
+		if _, err := os.Stat(filename); err != nil {
+			if os.IsNotExist(err) {
+				return CACHE_NOT_FOUND
+			}
+			return CACHE_NOT_FOUND
+		}
+		http.ServeFile(this.Ctx.ResponseWriter, this.Ctx.Request, filename)
+		return CACHE_FOUND
+	}
+	return CACHE_DISABLED
+}
+
+var cachePathList []string = make([]string, 0)
+
+// check cache file, if cache file is exists, it will return content by cache and
+// if cache file is not exists, it will create cache file
+// filename=/content/cid?abc=123
+// the dir /var/content and file /var/content/cid?abc=123 will be created.
+func (this *Page) CachePage() {
+	if this.Cache.Type == "file" {
+		filename := "var/cache" + this.Ctx.Request.RequestURI + ".html"
+		uri := []byte(this.Ctx.Request.RequestURI)
+		n := bytes.Index(uri, []byte("?"))
+		var t []byte
+
+		if n != -1 {
+			t = bytes.Trim(uri[:n], "/")
+		} else {
+			t = bytes.Trim(uri, "/")
+		}
+		arr := bytes.Split(t, []byte("/"))
+		// prepare dir, if dir is not exists , it will be create.
+		path := "var/cache/"
+		count := len(arr) - 1
+		for i := 0; i < count; i++ {
+			path += string(arr[i]) + "/"
+
+			if util.InStringArray(cachePathList, path) {
+				continue
+			} else {
+				cachePathList = append(cachePathList, path)
+			}
+
+			if _, err := os.Stat(path); err != nil {
+				if os.IsNotExist(err) {
+					os.Mkdir(path, os.ModeDir)
+				}
+			}
+
+		}
+
+		this.savePageToFile(filename)
+		http.ServeFile(this.Ctx.ResponseWriter, this.Ctx.Request, filename)
+	}
+}
+
+func (this *Page) savePageToFile(filename string) {
+	out, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE, 0)
 	if err != nil {
 		log.App.Fatalln(err)
 	}
 	this.BuildLayout().RenderLayout(out)
+}
+func (this *Page) ToStaticFile() {
+	this.savePageToFile(httpServer.StaticDir + "/" + this.LayoutData.View + ".html")
 }
 
 func (this *Page) BuildLayout() *AppLayout {
@@ -96,18 +186,10 @@ func (this *Page) BuildLayout() *AppLayout {
 	return this.Layout
 }
 
-func (this *Page) Before() {
-
-}
-func (this *Page) Get() bool {
-	return true
-}
-func (this *Page) Post() bool {
-	return true
-}
-func (this *Page) After() {
-
-}
+func (this *Page) Auth()  {}
+func (this *Page) Get()   {}
+func (this *Page) Post()  {}
+func (this *Page) After() {}
 
 type ThemeData struct {
 	Css      string

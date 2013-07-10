@@ -38,7 +38,8 @@ func (this *Upload) ParseFormFile(field string) (*OriginFile, error) {
 		return nil, errors.New("file token must be set!")
 	}
 
-	token := this.Ctx.Request.Form["token"][0]
+	token := this.Ctx.Request.FormValue("token")
+	println(token)
 	return &OriginFile{FileName: header.Filename, File: fn, Token: token}, nil
 }
 
@@ -64,7 +65,7 @@ func (this *Upload) Build(origin *OriginFile) (*StoreFile, error) {
 	arr := strings.Split(filename, ".")
 	ext := ""
 	if len(arr) > 1 {
-		ext = "." + arr[len(arr)-1]
+		ext = strings.ToLower("." + arr[len(arr)-1])
 		name = filename[0 : len(filename)-len(ext)]
 	} else {
 		name = filename

@@ -57,7 +57,7 @@ func (ctx *Context) SetHeader(hdr string, val string, unique bool) {
 
 func (ctx *Context) SetCookie(name string, value string, age int64, path string, domain string) {
 	var expires time.Time
-	if age > 0 {
+	if age != 0 {
 		expires = time.Unix(time.Now().Unix()+age, 0)
 	}
 	cookie := &http.Cookie{
@@ -68,6 +68,15 @@ func (ctx *Context) SetCookie(name string, value string, age int64, path string,
 		Expires: expires,
 	}
 	http.SetCookie(ctx.ResponseWriter, cookie)
+}
+
+func (ctx *Context) DefaultAuth(path string) bool {
+	if auth := (&UserAuth{}).SetContext(ctx); auth.IsNotLogin() {
+		auth.ClearCookie()
+		ctx.Redirect(path + "?redirect=" + ctx.Request.URL.RequestURI())
+		return false
+	}
+	return true
 }
 
 func webTime(t time.Time) string {

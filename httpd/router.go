@@ -84,7 +84,7 @@ func addRouteTo(rule string, clas interface{}, itype int) {
 		}
 
 		//prepare regexp pattern
-		p := regReplace.ReplaceAllString(rule, "(\\w+)")
+		p := regReplace.ReplaceAllString("^"+rule+"$", "(\\w+)")
 		regPath, _ = regexp.Compile(p)
 	} else {
 		if strings.HasSuffix(rule, "/") {

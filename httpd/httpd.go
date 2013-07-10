@@ -58,12 +58,23 @@ func init() {
 	HomeUrl = "/"
 	StaticUrl = "/"
 
-	if _, err := os.Stat("code/log"); err != nil {
+	if _, err := os.Stat("var"); err != nil {
 		if os.IsNotExist(err) {
-			os.Mkdir("code/log", os.ModeDir)
+			os.Mkdir("var", os.ModeDir)
 		}
 	}
 
+	if _, err := os.Stat("var/log"); err != nil {
+		if os.IsNotExist(err) {
+			os.Mkdir("var/log", os.ModeDir)
+		}
+	}
+
+	if _, err := os.Stat("var/cache"); err != nil {
+		if os.IsNotExist(err) {
+			os.Mkdir("var/cache", os.ModeDir)
+		}
+	}
 }
 
 // Initialize server
@@ -75,7 +86,7 @@ func Init() {
 	RunMode = conf.GetRunMode()
 
 	names := []string{}
-	log.Init("code/log/", names, RunMode)
+	log.Init("var/log/", names, RunMode)
 
 	if appConf.IsSet("home_url") {
 		HomeUrl = appConf.GetString("home_url")
@@ -249,7 +260,12 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 	}
 	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
 
-	result := prt.MethodByName(data.Method).Call([]reflect.Value{reflect.ValueOf(data.Args)})
+	var result []reflect.Value
+	if data.Args == nil {
+		result = prt.MethodByName(data.Method).Call(nil)
+	} else {
+		result = prt.MethodByName(data.Method).Call([]reflect.Value{reflect.ValueOf(data.Args)})
+	}
 
 	prt.MethodByName("Reply").Call(result)
 
@@ -268,27 +284,49 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 		// http.Error(rw, "Page Not Found!", 404)
 		return
 	}
-	prt := reflect.New(routeMatched.ClassType)
 
 	ctx := buildContext(rw, req, routeMatched)
-
+	prt := reflect.New(routeMatched.ClassType)
 	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
-	prt.MethodByName("Init").Call(nil)
 
-	prt.MethodByName("Before").Call(nil)
+	doCache := false
+	v := prt.MethodByName("CheckPageCache").Call(nil)
 
-	var val []reflect.Value
-	if req.Method == "POST" {
-		val = prt.MethodByName("Post").Call(nil)
-
-	} else {
-		val = prt.MethodByName("Get").Call(nil)
+	switch int(v[0].Int()) {
+	case CACHE_FOUND:
+		return
+	case CACHE_NOT_FOUND:
+		doCache = true
 	}
-	if len(val) > 0 && !val[0].Bool() {
+
+	isExit := func(val []reflect.Value) bool {
+		return len(val) > 0 && !val[0].Bool()
+	}
+
+	if isExit(prt.MethodByName("Init").Call(nil)) {
 		return
 	}
 
-	prt.MethodByName("After").Call(nil)
+	if req.Method == "POST" {
+		if isExit(prt.MethodByName("Post").Call(nil)) {
+			return
+		}
+
+	} else {
+		if isExit(prt.MethodByName("Get").Call(nil)) {
+			return
+		}
+	}
+
+	if isExit(prt.MethodByName("After").Call(nil)) {
+		return
+	}
+
+	if doCache {
+		prt.MethodByName("CachePage").Call(nil)
+		return
+	}
+
 	prt.MethodByName("RenderPage").Call(nil)
 }
 
@@ -301,14 +339,13 @@ func buildContext(rw http.ResponseWriter, req *http.Request, routeMatched *Route
 	return &Context{ResponseWriter: rw, Request: req, RouterParams: routeMatched.Params}
 }
 
-func MyErr(code int, message string) *MyError {
-	return &MyError{Code: code, Message: message, IsError: true}
+func MyErr(code int, messages ...interface{}) *MyError {
+	return &MyError{Code: code, Messages: messages}
 }
 
 type MyError struct {
-	Code    int
-	Message string
-	IsError bool
+	Code     int
+	Messages []interface{}
 }
 
 func (this *MyError) Write(w io.Writer) *MyError {
@@ -316,19 +353,41 @@ func (this *MyError) Write(w io.Writer) *MyError {
 	return this
 }
 
-func (this *MyError) WriteAndLog(w io.Writer) *MyError {
-	log.App.Err("MYERR", this.Code, this.Message)
-	w.Write([]byte(this.String()))
+func (this *MyError) Log() *MyError {
+	log.App.Err("MYERR", this.Code, fmt.Sprint(this.Messages...))
 	return this
 }
 
 func (this *MyError) Data() map[string]interface{} {
 	m := make(map[string]interface{})
 	m["code"] = this.Code
-	m["message"] = this.Message
-	m["iserror"] = true
+	m["error"] = true
+	m["message"] = fmt.Sprint(this.Messages...)
 	return m
 }
-func (this *MyError) String() string {
-	return fmt.Sprintf("{\"code\":%d,\"message\":\"%s\", \"iserror\": true}", this.Code, this.Message)
+func (this *MyError) Json() string {
+	return fmt.Sprintf("{\"code\":%d,\"message\":\"%s\", \"iserror\": true}", this.Code, fmt.Sprint(this.Messages...))
 }
+func (this *MyError) String() string {
+	return fmt.Sprintf("code %d:%s", this.Code, fmt.Sprint(this.Messages...))
+}
+func (this *MyError) Error() string {
+	return this.String()
+}
+
+type MapData map[string]interface{}
+
+func (this MapData) GetString(key string) string {
+	return this[key].(string)
+}
+func (this MapData) GetInt64(key string) int64 {
+	return this[key].(int64)
+}
+func (this MapData) GetFloat64(key string) float64 {
+	return this[key].(float64)
+}
+func (this MapData) GetBool(key string) bool {
+	return this[key].(bool)
+}
+
+type Object interface{}
