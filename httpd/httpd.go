@@ -353,8 +353,23 @@ func (this *MyError) Write(w io.Writer) *MyError {
 	return this
 }
 
-func (this *MyError) Log() *MyError {
-	log.App.Err("MYERR", this.Code, fmt.Sprint(this.Messages...))
+func (this *MyError) Log(level string) *MyError {
+	switch level {
+	case "alert":
+		log.App.Alert("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	case "crit":
+		log.App.Crit("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	case "warn":
+		log.App.Warn("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	case "notice":
+		log.App.Notice("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	case "info":
+		log.App.Info("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	case "debug":
+		log.App.Debug("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	default:
+		log.App.Error("MYERR", this.Code, fmt.Sprint(this.Messages...))
+	}
 	return this
 }
 

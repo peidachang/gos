@@ -6,13 +6,13 @@ import (
 )
 
 type IRender interface {
-	render(io.Writer)
+	Render(io.Writer)
 }
 
 // EmptyRender
 type EmptyRender struct{}
 
-func (this *EmptyRender) render(w io.Writer) {}
+func (this *EmptyRender) Render(w io.Writer) {}
 
 // TemplateRender
 type TemplateRender struct {
@@ -20,7 +20,7 @@ type TemplateRender struct {
 	Data interface{}
 }
 
-func (this *TemplateRender) render(w io.Writer) {
+func (this *TemplateRender) Render(w io.Writer) {
 	tmpl, _ := template.ParseFiles("code/template" + Theme.GetTemplate() + this.View + ".htm")
 	tmpl.Execute(w, this.Data)
 }
@@ -30,7 +30,7 @@ type HeadItemRender struct {
 	Data []string
 }
 
-func (this *HeadItemRender) render(w io.Writer) {
+func (this *HeadItemRender) Render(w io.Writer) {
 	for _, v := range this.Data {
 		w.Write([]byte(v + "\n"))
 	}
@@ -41,7 +41,7 @@ type JsRender struct {
 	Data []string
 }
 
-func (this *JsRender) render(w io.Writer) {
+func (this *JsRender) Render(w io.Writer) {
 	for _, v := range this.Data {
 		w.Write([]byte("<script src=\"" + StaticUrl + Theme.GetJs() + v + httpServer.Timestamp + "\"></script>\n"))
 	}
@@ -52,7 +52,7 @@ type CssRender struct {
 	Data []string
 }
 
-func (this *CssRender) render(w io.Writer) {
+func (this *CssRender) Render(w io.Writer) {
 	for _, v := range this.Data {
 		w.Write([]byte("<link href=\"" + StaticUrl + Theme.GetCss() + v + httpServer.Timestamp + "\" rel=\"stylesheet\"/>\n"))
 	}
@@ -65,7 +65,7 @@ type TextRender struct {
 	Data   map[string]interface{}
 }
 
-func (this *TextRender) render(w io.Writer) {
+func (this *TextRender) Render(w io.Writer) {
 
 	tmpl, _ := template.New(this.Name).Parse(this.Source)
 	tmpl.Execute(w, this.Data)

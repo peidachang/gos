@@ -9,7 +9,7 @@ import (
 	"reflect"
 )
 
-var empty = &EmptyRender{}
+var RenderNothing = &EmptyRender{}
 
 const (
 	CACHE_NOT_FOUND int = 0
@@ -62,11 +62,11 @@ func (this *Page) Init() {
 	this.Data = make(map[string]interface{})
 
 	this.Layout = &AppLayout{
-		topRender:     empty,
-		headerRender:  empty,
-		contextRender: empty,
-		footerRender:  empty,
-		bottomRender:  empty}
+		topRender:     RenderNothing,
+		headerRender:  RenderNothing,
+		contextRender: RenderNothing,
+		footerRender:  RenderNothing,
+		bottomRender:  RenderNothing}
 }
 func (this *Page) SetContext(ct *Context) {
 	this.Ctx = ct
@@ -157,9 +157,9 @@ func (this *Page) BuildLayout() *AppLayout {
 	headLayout := &HeadLayout{
 		JsPosition:     this.LayoutData.JsPosition,
 		Title:          this.LayoutData.Title,
-		HeadItemRender: empty,
-		JsRender:       empty,
-		CssRender:      empty}
+		HeadItemRender: RenderNothing,
+		JsRender:       RenderNothing,
+		CssRender:      RenderNothing}
 
 	if len(this.LayoutData.Head) > 0 {
 		headLayout.HeadItemRender = &HeadItemRender{

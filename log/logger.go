@@ -79,8 +79,10 @@ func (this *Logger) Crit(m ...interface{}) {
 	this.Logger.SetPrefix("[crit]")
 	this.Write(m...)
 }
-
 func (this *Logger) Err(m ...interface{}) {
+	this.Error(m...)
+}
+func (this *Logger) Error(m ...interface{}) {
 	if Level < LOG_ERR {
 		return
 	}

@@ -55,25 +55,26 @@ func (ctx *Context) SetHeader(hdr string, val string, unique bool) {
 	}
 }
 
-func (ctx *Context) SetCookie(name string, value string, age int64, path string, domain string) {
+func (ctx *Context) SetCookie(name string, value string, age int64, path string, domain string, httpOnly bool) {
 	var expires time.Time
 	if age != 0 {
 		expires = time.Unix(time.Now().Unix()+age, 0)
 	}
 	cookie := &http.Cookie{
-		Name:    name,
-		Value:   value,
-		Path:    path,
-		Domain:  domain,
-		Expires: expires,
+		Name:     name,
+		Value:    value,
+		Path:     path,
+		Domain:   domain,
+		Expires:  expires,
+		HttpOnly: httpOnly,
 	}
 	http.SetCookie(ctx.ResponseWriter, cookie)
 }
 
-func (ctx *Context) DefaultAuth(path string) bool {
+func (ctx *Context) IsUserLogin(loginpath string) bool {
 	if auth := (&UserAuth{}).SetContext(ctx); auth.IsNotLogin() {
 		auth.ClearCookie()
-		ctx.Redirect(path + "?redirect=" + ctx.Request.URL.RequestURI())
+		ctx.Redirect(loginpath + "?redirect=" + ctx.Request.URL.RequestURI())
 		return false
 	}
 	return true

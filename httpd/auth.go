@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/jiorry/gos/db"
 	"github.com/jiorry/gos/lib"
-	"github.com/jiorry/gos/log"
 	"github.com/jiorry/gos/util"
 	"strconv"
 	"strings"
@@ -18,6 +17,9 @@ import (
 
 var poolRSAKey []*RSAKey
 var privateSecret string = util.Unique()
+var separator []byte = []byte("|")
+var CookieAuthKey string = "bbxauth"
+var CookieUserKey string = "bbxuser"
 
 type RSAKey struct {
 	Key       *rsa.PrivateKey
@@ -77,28 +79,36 @@ func (this *UserAuth) SetUser(row db.DataRow) *UserAuth {
 	return this
 }
 
-func (this *UserAuth) UserAuth(login string, cipher []byte) bool {
+func (this *UserAuth) GenerateUserToken(login string, pwd string, salt string) string {
+	return util.MD5String(login + salt + pwd + salt)
+}
+
+func (this *UserAuth) Auth(cipher []byte) (string, error) {
 	ts, b, err := this.PraseCipher(cipher)
 	if err != nil {
-		return false
+		return "", err
+	}
+	arr := bytes.Split(b, separator)
+	login := string(arr[0])
+	pwd := string(arr[1])
+
+	if time.Now().Unix()-int64(ts) > 30 {
+		return "", MyErr(0, "user auth is overdue").Log("notice")
 	}
 
 	user := this.Find(login)
 	if user == nil {
-		log.App.Notice("login name not found:", login)
-		return false
+		return login, MyErr(0, "login name not found").Log("notice")
 	}
 
-	token := user["Token"].(string)
-	if user["Login"] != login || fmt.Sprintf("%x", b[0:16]) != this.createToken(login, int64(ts), token, "") {
-		// fmt.Printf("%s-%s-\n%s\n%s\n", user["Login"], login, fmt.Sprintf("%x", b[0:16]), this.createToken(login, int64(ts), token, ""))
+	if user.GetString("Token") != this.GenerateUserToken(login, pwd, user.GetString("Salt")) {
 		this.ClearCookie()
 		this.user = nil
-		return false
+		return login, MyErr(0, "login name password is not matched").Log("notice")
 	}
 
 	this.user = user
-	return true
+	return login, nil
 }
 
 func (this *UserAuth) Find(login string) db.DataRow {
@@ -112,8 +122,8 @@ func (this *UserAuth) Find(login string) db.DataRow {
 	return row
 }
 
-func (this *UserAuth) createToken(login string, ts int64, usertoken string, salt string) string {
-	return util.MD5String(fmt.Sprint(login, ts, usertoken, ts, salt))
+func (this *UserAuth) createAuthToken(login string, ts int64, usertoken string, salt string) string {
+	return util.MD5String(fmt.Sprint(salt, login, ts, usertoken, salt))
 }
 
 func (this *UserAuth) SetCookie(age int64) {
@@ -123,11 +133,13 @@ func (this *UserAuth) SetCookie(age int64) {
 		unix = ts + age
 	}
 
-	this.ctx.SetCookie("auth", fmt.Sprintf("%s-%d-%s", this.UserName(), ts, this.createToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "")
+	this.ctx.SetCookie(CookieAuthKey, fmt.Sprintf("%s|%d|%s", this.UserName(), ts, this.createAuthToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "", true)
+	this.ctx.SetCookie(CookieUserKey, this.UserName(), unix, "/", "", false)
 }
 
 func (this *UserAuth) ClearCookie() {
-	this.ctx.SetCookie("auth", "", -1, "/", "")
+	this.ctx.SetCookie(CookieAuthKey, "", -1, "/", "", true)
+	this.ctx.SetCookie(CookieUserKey, "", -1, "/", "", false)
 }
 
 func (this *UserAuth) IsLogin() bool {
@@ -156,12 +168,12 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 	if len(this.user) > 0 {
 		return this.user
 	}
-	v, err := this.ctx.Request.Cookie("auth")
+	v, err := this.ctx.Request.Cookie(CookieAuthKey)
 	if err != nil {
 		return this.user
 	}
 
-	arr := strings.Split(v.Value, "-")
+	arr := strings.Split(v.Value, string(separator))
 	if len(arr) != 3 {
 		return this.user
 	}
@@ -171,7 +183,7 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 	n, _ := strconv.Atoi(arr[1])
 	ts := int64(n)
 
-	if this.user == nil || arr[2] != this.createToken(login, ts, this.user["Token"].(string), privateSecret) {
+	if this.user == nil || arr[2] != this.createAuthToken(login, ts, this.user["Token"].(string), privateSecret) {
 		this.user = nil
 	}
 
@@ -179,7 +191,7 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 }
 
 func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
-	arr := bytes.Split(cipher, []byte(" "))
+	arr := bytes.Split(cipher, separator)
 	rsakeyUnix, _ := strconv.Atoi(string(arr[0]))
 
 	rsaCipher := make([]byte, len(arr[1])/2)
@@ -187,33 +199,40 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 
 	ppk := GetRSAKey(int64(rsakeyUnix))
 	if ppk == nil {
-		return 0, nil, MyErr(0, "no rsa key found!").Log()
+		return 0, nil, MyErr(0, "no rsa key found!").Log("error")
 	}
 
 	aeskeyBase64, err := rsa.DecryptPKCS1v15(rand.Reader, ppk.Key, rsaCipher)
 	if err != nil {
-		return 0, nil, MyErr(0, "decrypt::", err).Log()
+		return 0, nil, MyErr(0, "decrypt::", err).Log("error")
 	}
 
 	aeskey := make([]byte, 18)
 	base64.StdEncoding.Decode(aeskey, aeskeyBase64)
 	if len(aeskey) == 0 {
-		return 0, nil, MyErr(0, "aeskey is empty").Log()
+		return 0, nil, MyErr(0, "aeskey is empty").Log("error")
 	}
 	aeskey = aeskey[:16]
 
 	code, err := base64.StdEncoding.DecodeString(string(arr[2]))
 	if err != nil {
-		return 0, nil, MyErr(0, "base64 decode:", err).Log()
+		return 0, nil, MyErr(0, "base64 decode:", err).Log("error")
 	}
 
 	now := time.Now()
 	ts, _ := strconv.Atoi(fmt.Sprintf("%x", code[0:8]))
 
 	if now.Unix()-int64(ts/1000) > 30 {
-		return 0, nil, MyErr(0, "login ts is exprie").Log()
+		return 0, nil, MyErr(0, "login ts is exprie").Log("error")
 	}
 
 	b := lib.AESDecrypt(code[8:24], aeskey[0:16], code[24:])
-	return int64(ts), b, nil
+
+	n := bytes.Index(b, []byte("-"))
+	l, err := strconv.Atoi(string(b[0:n]))
+	if err != nil {
+		return 0, nil, MyErr(0, err).Log("error")
+	}
+
+	return int64(ts), b[n+1 : n+1+l], nil
 }
