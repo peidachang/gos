@@ -79,6 +79,12 @@ func (this *QueryBuilder) Order(s string) *QueryBuilder {
 	return this
 }
 
+func (this *QueryBuilder) Page(page int, pageSize int) *QueryBuilder {
+	this.offset = (page - 1) * pageSize
+	this.limit = pageSize
+	return this
+}
+
 func (this *QueryBuilder) Limit(n int) *QueryBuilder {
 	this.limit = n
 	return this
@@ -267,7 +273,7 @@ func (this *CounterBuilder) Query(cond string, args ...interface{}) (int64, erro
 	}
 	r, err := this.GetDatabase().QueryPrepare("select count(1) as count from "+this.table+cond, args...)
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 	return r[0].GetInt64("count"), nil
 }

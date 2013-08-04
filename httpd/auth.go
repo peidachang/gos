@@ -134,7 +134,7 @@ func (this *UserAuth) SetCookie(age int64) {
 	}
 
 	this.ctx.SetCookie(CookieAuthKey, fmt.Sprintf("%s|%d|%s", this.UserName(), ts, this.createAuthToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "", true)
-	this.ctx.SetCookie(CookieUserKey, this.UserName(), unix, "/", "", false)
+	this.ctx.SetCookie(CookieUserKey, fmt.Sprint(this.UserName(), "|", this.UserType()), unix, "/", "", false)
 }
 
 func (this *UserAuth) ClearCookie() {
@@ -159,9 +159,16 @@ func (this *UserAuth) UserId() int64 {
 
 func (this *UserAuth) UserName() string {
 	if this.IsLogin() {
-		return this.user["Login"].(string)
+		return this.user.GetString("Login")
 	}
 	return ""
+}
+
+func (this *UserAuth) UserType() int64 {
+	if this.IsLogin() {
+		return this.user.GetInt64("IType")
+	}
+	return -1
 }
 
 func (this *UserAuth) CurrentUser() db.DataRow {

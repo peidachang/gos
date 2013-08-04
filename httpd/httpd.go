@@ -6,6 +6,7 @@ import (
 	"github.com/jiorry/gos/cache"
 	"github.com/jiorry/gos/db"
 	"github.com/jiorry/gos/log"
+	"github.com/jiorry/gos/util"
 	"io"
 	"net"
 	"net/http"
@@ -198,6 +199,10 @@ func startFcig() {
 
 }
 
+func isDie(val []reflect.Value) bool {
+	return len(val) > 0 && !val[0].Bool()
+}
+
 func pingHander(rw http.ResponseWriter, req *http.Request) {
 	rw.Write([]byte("ok"))
 }
@@ -238,8 +243,8 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	prt := reflect.New(routeMatched.ClassType)
-
 	ctx := buildContext(rw, req, routeMatched)
+	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
 
 	if len(req.PostForm["json"]) == 0 {
 		MyErr(0, "miss parameters!").Write(rw)
@@ -249,8 +254,18 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 	data := &WSParams{}
 	if err := json.Unmarshal([]byte(req.PostForm["json"][0]), data); err != nil {
 		MyErr(0, err.Error()).Write(rw)
-		//ctx.Exit(500, "decode data error")
 		return
+	}
+
+	prt.MethodByName("Init").Call(nil)
+	requireAuth := prt.Elem().FieldByName("RequireAuth").Bool()
+	publicFuncs := prt.Elem().FieldByName("PublicFunctions").Interface().([]string)
+
+	if requireAuth && !util.InStringArray(publicFuncs, data.Method) {
+		if val := prt.MethodByName("IsAuth").Call(nil); !val[0].Bool() {
+			ctx.ResponseWriter.Write([]byte(MyErr(1, "user authrize failed!").Json()))
+			return
+		}
 	}
 
 	if prt.MethodByName(data.Method).Kind() == reflect.Invalid {
@@ -258,7 +273,6 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 		//ctx.Exit(500, "invalid function call")
 		return
 	}
-	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
 
 	var result []reflect.Value
 	if data.Args == nil {
@@ -267,6 +281,10 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 		result = prt.MethodByName(data.Method).Call([]reflect.Value{reflect.ValueOf(data.Args)})
 	}
 
+	if len(result) != 2 {
+		log.App.Err("Web Service API Function must return (data, error)")
+		return
+	}
 	prt.MethodByName("Reply").Call(result)
 
 }
@@ -299,26 +317,22 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 		doCache = true
 	}
 
-	isExit := func(val []reflect.Value) bool {
-		return len(val) > 0 && !val[0].Bool()
-	}
-
-	if isExit(prt.MethodByName("Init").Call(nil)) {
+	if isDie(prt.MethodByName("Init").Call(nil)) {
 		return
 	}
 
 	if req.Method == "POST" {
-		if isExit(prt.MethodByName("Post").Call(nil)) {
+		if isDie(prt.MethodByName("Post").Call(nil)) {
 			return
 		}
 
 	} else {
-		if isExit(prt.MethodByName("Get").Call(nil)) {
+		if isDie(prt.MethodByName("Get").Call(nil)) {
 			return
 		}
 	}
 
-	if isExit(prt.MethodByName("After").Call(nil)) {
+	if isDie(prt.MethodByName("After").Call(nil)) {
 		return
 	}
 
@@ -384,7 +398,7 @@ func (this *MyError) Json() string {
 	return fmt.Sprintf("{\"code\":%d,\"message\":\"%s\", \"iserror\": true}", this.Code, fmt.Sprint(this.Messages...))
 }
 func (this *MyError) String() string {
-	return fmt.Sprintf("code %d:%s", this.Code, fmt.Sprint(this.Messages...))
+	return fmt.Sprintf("%d: %s", this.Code, fmt.Sprint(this.Messages...))
 }
 func (this *MyError) Error() string {
 	return this.String()

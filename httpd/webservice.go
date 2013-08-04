@@ -10,24 +10,30 @@ type WSParams struct {
 	Args   interface{}
 }
 
-// func (this *WSParams) GetMethod() string {
-// 	return this.method
-// }
-
-// func (this *WSParams) GetArgs() map[string]interface{} {
-// 	return this.args
-// }
-
 type WebService struct {
-	Ctx *Context
+	UserAuth        *UserAuth
+	Ctx             *Context
+	RequireAuth     bool
+	PublicFunctions []string
 }
 
 func (this *WebService) SetContext(ctx *Context) {
 	this.Ctx = ctx
 }
 
-func (this *WebService) Reply(data interface{}) {
+func (this *WebService) Init() {}
+
+func (this *WebService) IsAuth() bool {
+	this.UserAuth = (&UserAuth{}).SetContext(this.Ctx)
+	return this.UserAuth.IsLogin()
+}
+
+func (this *WebService) Reply(data interface{}, err error) {
 	this.Ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		this.Ctx.WriteString(MyErr(0, err).Json())
+		return
+	}
 
 	encoder := json.NewEncoder(this.Ctx.ResponseWriter)
 	if err := encoder.Encode(data); err != nil {
