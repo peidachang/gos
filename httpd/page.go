@@ -22,43 +22,75 @@ type PageCache struct {
 	Expire int64
 }
 type Page struct {
+	View  *ThemeItem
+	Title string
+	Head  []string
+	Js    ThemeItems
+	Css   ThemeItems
+
+	Timestamp   string
+	JsPosition  string // head or end
 	RequireAuth bool
-	Cache       *PageCache
-	Ctx         *Context
-	LayoutData  *LayoutData
-	Data        interface{}
-	Layout      *AppLayout
+
+	Cache  *PageCache
+	Ctx    *Context
+	Data   interface{}
+	Layout *AppLayout
 }
 
 type IPage interface {
 	ToStaticFile()
 }
 
-func DefaultData() *LayoutData {
-	p := &LayoutData{JsPosition: "head"}
-	p.Head = []string{
-		`<meta charset="utf-8">`,
-		`<script type="text/javascript">function addLoadFunction(func){var oldonload=window.onload;if(func && typeof oldonload!="function")window.onload=func;else{window.onload=function(){if(oldonload) oldonload();if(func) func()}}}</script>`}
-	return p
+func (this *Page) SetView(viewName string) *Page {
+	this.View = &ThemeItem{"", "template", viewName}
+	return this
 }
 
-func StaticFiles(pages []IPage) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.App.Err(err)
-		}
-	}()
+func (this *Page) SetThemeView(theme string, viewName string) *Page {
+	this.View = &ThemeItem{theme, "template", viewName}
+	return this
+}
 
-	for _, p := range pages {
-		v := reflect.ValueOf(p)
-		v.MethodByName("Init").Call(nil)
-		p.ToStaticFile()
+func (this *Page) AddHead(items ...string) *Page {
+	this.Head = append(this.Head, items...)
+	return this
+}
+
+func (this *Page) AddThemeJs(theme string, items ...string) *Page {
+	arr := make([]*ThemeItem, len(items))
+	for i, _ := range items {
+		arr[i] = &ThemeItem{theme, "js", items[i]}
 	}
+	this.Js = append(this.Js, arr...)
+	return this
+}
+func (this *Page) AddJs(items ...string) *Page {
+	return this.AddThemeJs("", items...)
+}
+
+func (this *Page) AddThemeCss(theme string, items ...string) *Page {
+	arr := make([]*ThemeItem, len(items))
+	for i, _ := range items {
+		arr[i] = &ThemeItem{theme, "css", items[i]}
+	}
+	this.Css = append(this.Css, arr...)
+	return this
+}
+
+func (this *Page) AddCss(items ...string) *Page {
+	return this.AddThemeCss("", items...)
 }
 
 func (this *Page) Init() {
 	this.Cache = &PageCache{"none", 0}
-	this.LayoutData = DefaultData()
+	this.Js = ThemeItems{}
+	this.Css = ThemeItems{}
+	this.JsPosition = "head"
+	this.Head = []string{
+		`<meta charset="utf-8">`,
+		`<script type="text/javascript">function addLoadFunction(func){var oldonload=window.onload;if(func && typeof oldonload!="function")window.onload=func;else{window.onload=function(){if(oldonload) oldonload();if(func) func()}}}</script>`}
+
 	this.Data = make(map[string]interface{})
 
 	this.Layout = &AppLayout{
@@ -68,6 +100,7 @@ func (this *Page) Init() {
 		footerRender:  RenderNothing,
 		bottomRender:  RenderNothing}
 }
+
 func (this *Page) SetContext(ct *Context) {
 	this.Ctx = ct
 }
@@ -150,36 +183,36 @@ func (this *Page) savePageToFile(filename string) {
 	this.BuildLayout().RenderLayout(out)
 }
 func (this *Page) ToStaticFile() {
-	this.savePageToFile(httpServer.StaticDir + "/" + this.LayoutData.View + ".html")
+	this.savePageToFile(httpServer.StaticDir + "/" + this.View.GetPath() + ".html")
 }
 
 func (this *Page) BuildLayout() *AppLayout {
 	headLayout := &HeadLayout{
-		JsPosition:     this.LayoutData.JsPosition,
-		Title:          this.LayoutData.Title,
+		JsPosition:     this.JsPosition,
+		Title:          this.Title,
 		HeadItemRender: RenderNothing,
 		JsRender:       RenderNothing,
 		CssRender:      RenderNothing}
 
-	if len(this.LayoutData.Head) > 0 {
+	if len(this.Head) > 0 {
 		headLayout.HeadItemRender = &HeadItemRender{
-			Data: this.LayoutData.Head}
+			Data: this.Head}
 	}
 
-	if len(this.LayoutData.Css) > 0 {
+	if len(this.Css) > 0 {
 		headLayout.CssRender = &CssRender{
-			Data: this.LayoutData.Css}
+			Data: this.Css}
 	}
 
-	if len(this.LayoutData.Js) > 0 {
+	if len(this.Js) > 0 {
 		headLayout.JsRender = &JsRender{
-			Data: this.LayoutData.Js}
+			Data: this.Js}
 	}
 	this.Layout.SetHeadLayout(headLayout)
 
-	if len(this.LayoutData.View) > 0 {
-		this.Layout.SetContext(&TemplateRender{
-			View: this.LayoutData.View,
+	if this.View != nil {
+		this.Layout.SetContextRender(&TemplateRender{
+			View: this.View,
 			Data: this.Data})
 	}
 
@@ -191,27 +224,29 @@ func (this *Page) Get()   {}
 func (this *Page) Post()  {}
 func (this *Page) After() {}
 
-type ThemeData struct {
-	Css      string
-	Js       string
-	Template string
+type ThemeItem struct {
+	Theme, Folder, Value string
 }
 
-func (this *ThemeData) GetCss() string {
-	if this.Css == "" {
-		return "/css/"
+func (this *ThemeItem) GetPath() string {
+	if this.Theme == "" {
+		return "/" + this.Folder + "/" + this.Value
 	}
-	return "/themes/" + this.Css + "/css/"
+	return "/themes/" + this.Theme + "/" + this.Folder + "/" + this.Value
 }
-func (this *ThemeData) GetJs() string {
-	if this.Js == "" {
-		return "/js/"
+
+type ThemeItems []*ThemeItem
+
+func StaticFiles(pages []IPage) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.App.Emerg(err)
+		}
+	}()
+
+	for _, p := range pages {
+		v := reflect.ValueOf(p)
+		v.MethodByName("Init").Call(nil)
+		p.ToStaticFile()
 	}
-	return "/themes/" + this.Js + "/js/"
-}
-func (this *ThemeData) GetTemplate() string {
-	if this.Js == "" {
-		return "/"
-	}
-	return "/themes/" + this.Template + "/"
 }

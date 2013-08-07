@@ -41,9 +41,15 @@ func init() {
 
 // create a database instance
 func New(name string, mapData map[string]string) {
+	if mapData == nil {
+		mapData = map[string]string{}
+		mapData["driver"] = "sqlite3"
+		mapData["file"] = "./app.db"
+	}
 	d := &Database{}
 	d.Name = name
 	d.DriverName = mapData["driver"]
+
 	switch d.DriverName {
 	case "postgres":
 		d.Driver = &drivers.Postgres{Dbname: mapData["dbname"],
@@ -349,7 +355,7 @@ func parseRow(rows *sql.Rows) (DataSet, error) {
 		}
 
 		if err = rows.Scan(tem...); err != nil {
-			log.App.Err(err)
+			log.App.Error(err)
 			return nil, err
 		}
 
@@ -362,7 +368,7 @@ func parseRow(rows *sql.Rows) (DataSet, error) {
 	}
 
 	if err = rows.Err(); err != nil {
-		log.App.Err(err)
+		log.App.Error(err)
 		log.App.Stack()
 		return nil, err
 	}

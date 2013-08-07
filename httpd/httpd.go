@@ -23,7 +23,6 @@ type HttpServer struct {
 	PprofOn    bool
 
 	StaticDir string
-	CacheDir  string
 	Timestamp string
 
 	EnablePing   bool
@@ -38,7 +37,7 @@ var (
 	httpServer *HttpServer
 	HomeUrl    string
 	StaticUrl  string
-	Theme      *ThemeData
+	SiteTheme  string
 	RunMode    string //"dev" or "prod"
 )
 
@@ -47,7 +46,6 @@ func init() {
 		Addr:         "",
 		Port:         8800,
 		StaticDir:    "static",
-		CacheDir:     "static",
 		PprofOn:      false,
 		EnableGzip:   false,
 		EnablePing:   false,
@@ -55,7 +53,7 @@ func init() {
 		EnableApi:    true,
 		UseFcgi:      false,
 	}
-	Theme = &ThemeData{}
+
 	HomeUrl = "/"
 	StaticUrl = "/"
 
@@ -81,7 +79,7 @@ func init() {
 // Initialize server
 // The config file (code/app.conf) will be loaded.
 func Init() {
-	conf := LoadConfig("code/")
+	conf := LoadConfig("app/")
 	appConf := conf["app"]
 	httpConf := conf["http"]
 	RunMode = conf.GetRunMode()
@@ -98,10 +96,6 @@ func Init() {
 
 	if httpConf.IsSet("static") {
 		httpServer.StaticDir = httpConf.GetString("static")
-	}
-
-	if httpConf.IsSet("cache_dir") {
-		httpServer.CacheDir = httpConf.GetString("cache_dir")
 	}
 
 	if httpConf.IsSet("timestamp") {
@@ -132,17 +126,8 @@ func Init() {
 	httpServer.EnableUpload = httpConf.GetBool("enable_upload")
 	httpServer.EnablePing = httpConf.GetBool("enable_ping")
 
-	if conf.IsSet("theme") {
-		ct := conf["theme"]
-		if ct.IsSet("template") {
-			Theme.Template = ct["template"]
-		}
-		if ct.IsSet("css") {
-			Theme.Css = ct["css"]
-		}
-		if ct.IsSet("js") {
-			Theme.Js = ct["js"]
-		}
+	if appConf.IsSet("theme") {
+		SiteTheme = appConf.GetString("theme")
 	}
 
 	if conf.IsSet("db") {
@@ -282,7 +267,7 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if len(result) != 2 {
-		log.App.Err("Web Service API Function must return (data, error)")
+		log.App.Error("Web Service API Function must return (data, error)")
 		return
 	}
 	prt.MethodByName("Reply").Call(result)
@@ -297,7 +282,7 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 		if strings.ContainsRune(req.URL.Path, '.') {
 			http.ServeFile(rw, req, httpServer.StaticDir+req.URL.Path)
 		} else {
-			http.ServeFile(rw, req, httpServer.CacheDir+req.URL.Path+".html")
+			http.ServeFile(rw, req, httpServer.StaticDir+req.URL.Path+".html")
 		}
 		// http.Error(rw, "Page Not Found!", 404)
 		return
@@ -363,7 +348,7 @@ type MyError struct {
 }
 
 func (this *MyError) Write(w io.Writer) *MyError {
-	w.Write([]byte(this.String()))
+	w.Write([]byte(this.Json()))
 	return this
 }
 

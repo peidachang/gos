@@ -27,10 +27,10 @@ type Logger struct {
 func (this *Logger) Init(file string) {
 	var out io.Writer
 	if RunMode == "dev" {
-		fmt.Println("[development]", file+" log is write in Stdout")
+		fmt.Println("[development]", "Logger is write in Stdout "+file)
 		out = os.Stdout
 	} else {
-		fmt.Println("[production]", file+" log is write in .log file")
+		fmt.Println("[production]", "Logger is write in .log file: "+file)
 		fmt.Println("[production]", "log level is:", Level)
 		var err error
 		out, err = os.OpenFile(file, os.O_APPEND|os.O_CREATE, 0)
@@ -47,80 +47,65 @@ func (this *Logger) SetPrefix(prefix string) {
 	this.Logger.SetPrefix(prefix)
 }
 
-func (this *Logger) Write(m ...interface{}) {
+func (this *Logger) Write(m ...interface{}) *Logger {
 	this.Logger.Println(m...)
+	return this
+}
+func (this *Logger) writelog(loglevel int, m ...interface{}) *Logger {
+	if Level < loglevel {
+		return this
+	}
+	this.Write(m...)
+	if PrintStackLevel >= loglevel {
+		this.Stack()
+	}
+	return this
 }
 
-func (this *Logger) Stack() {
+func (this *Logger) Stack() *Logger {
 	this.Logger.SetPrefix("[stack]")
 	this.Write(string(debug.Stack()))
+	return this
 }
 
-func (this *Logger) Emerg(m ...interface{}) {
-	if Level < LOG_EMERG {
-		return
-	}
+func (this *Logger) Emerg(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[emerg]")
-	this.Write(m...)
+	this.writelog(LOG_EMERG, m...)
+	this.Write("emergency exit")
+	os.Exit(0)
+	return this
 }
 
-func (this *Logger) Alert(m ...interface{}) {
-	if Level < LOG_ALERT {
-		return
-	}
+func (this *Logger) Alert(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[alert]")
-	this.Write(m...)
+	return this.writelog(LOG_ALERT, m...)
 }
 
-func (this *Logger) Crit(m ...interface{}) {
-	if Level < LOG_CRIT {
-		return
-	}
+func (this *Logger) Crit(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[crit]")
-	this.Write(m...)
+	return this.writelog(LOG_CRIT, m...)
 }
-func (this *Logger) Err(m ...interface{}) {
-	this.Error(m...)
-}
-func (this *Logger) Error(m ...interface{}) {
-	if Level < LOG_ERR {
-		return
-	}
+func (this *Logger) Error(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[err]")
-	this.Write(m...)
+	return this.writelog(LOG_ERR, m...)
 }
-func (this *Logger) Warn(m ...interface{}) {
-	if Level < LOG_WARNING {
-		return
-	}
+func (this *Logger) Warn(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[warn]")
-	this.Write(m...)
+	return this.writelog(LOG_WARNING, m...)
 }
-func (this *Logger) Notice(m ...interface{}) {
-	if Level < LOG_NOTICE {
-		return
-	}
+func (this *Logger) Notice(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[notice]")
-	this.Write(m...)
+	return this.writelog(LOG_NOTICE, m...)
 }
-func (this *Logger) Info(m ...interface{}) {
-	if Level < LOG_INFO {
-		return
-	}
+func (this *Logger) Info(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[info]")
-	this.Write(m...)
+	return this.writelog(LOG_INFO, m...)
 }
-func (this *Logger) Debug(m ...interface{}) {
-	if Level < LOG_DEBUG {
-		return
-	}
+func (this *Logger) Debug(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[debug]")
-	this.Write(m...)
+	return this.writelog(LOG_DEBUG, m...)
 }
-func (this *Logger) Sql(m ...interface{}) {
-	if Level < LOG_SQL {
-		return
-	}
+func (this *Logger) Sql(m ...interface{}) *Logger {
 	this.Logger.SetPrefix("[sql]")
-	this.Write(m...)
+	return this.writelog(LOG_SQL, m...)
 }

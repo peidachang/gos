@@ -5,20 +5,19 @@ import (
 )
 
 var (
-	Level   int
-	App     *Logger
-	RunMode string
+	Level           int
+	PrintStackLevel int
+	App             *Logger
+	RunMode         string
+	Folder          string
+	pool            loggers
 )
 
 type loggers map[string]*Logger
 
-var (
-	Folder string
-	pool   loggers
-)
-
 func init() {
 	pool = make(map[string]*Logger)
+	PrintStackLevel = 4
 }
 
 func Init(folder string, names []string, runmode string) {

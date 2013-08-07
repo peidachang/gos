@@ -18,8 +18,9 @@ import (
 var poolRSAKey []*RSAKey
 var privateSecret string = util.Unique()
 var separator []byte = []byte("|")
-var CookieAuthKey string = "bbxauth"
-var CookieUserKey string = "bbxuser"
+var CookieAuthKey string = "gosauth"
+var CookieUserKey string = "gosuser"
+var UserITypeField string = "IType"
 
 type RSAKey struct {
 	Key       *rsa.PrivateKey
@@ -107,6 +108,12 @@ func (this *UserAuth) Auth(cipher []byte) (string, error) {
 		return login, MyErr(0, "login name password is not matched").Log("notice")
 	}
 
+	if user.GetInt64(UserITypeField) < 0 {
+		this.ClearCookie()
+		this.user = nil
+		return login, MyErr(0, "user is closed").Log("notice")
+	}
+
 	this.user = user
 	return login, nil
 }
@@ -166,7 +173,7 @@ func (this *UserAuth) UserName() string {
 
 func (this *UserAuth) UserType() int64 {
 	if this.IsLogin() {
-		return this.user.GetInt64("IType")
+		return this.user.GetInt64(UserITypeField)
 	}
 	return -1
 }

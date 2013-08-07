@@ -4,26 +4,6 @@ import (
 	"io"
 )
 
-type LayoutData struct {
-	View       string
-	Title      string
-	Head       []string
-	Js         []string
-	Css        []string
-	Timestamp  string
-	JsPosition string // head or end
-}
-
-func (this *LayoutData) AddHeadItem(items ...string) {
-	this.Head = append(this.Head, items...)
-}
-func (this *LayoutData) AddJs(items ...string) {
-	this.Js = append(this.Js, items...)
-}
-func (this *LayoutData) AddCss(items ...string) {
-	this.Css = append(this.Css, items...)
-}
-
 type AppLayout struct {
 	headLayout    *HeadLayout
 	topRender     IRender
@@ -33,45 +13,46 @@ type AppLayout struct {
 	bottomRender  IRender
 }
 
-func (this *AppLayout) TopView(view string, data interface{}) {
+func (this *AppLayout) TopView(theme string, name string, data interface{}) {
 	this.topRender = &TemplateRender{
-		View: view,
+		View: &ThemeItem{theme, "template", name},
 		Data: data}
 }
-func (this *AppLayout) HeaderView(view string, data interface{}) {
+func (this *AppLayout) HeaderView(theme string, name string, data interface{}) {
 	this.headerRender = &TemplateRender{
-		View: view,
+		View: &ThemeItem{theme, "template", name},
 		Data: data}
 }
-func (this *AppLayout) FooterView(view string, data interface{}) {
+func (this *AppLayout) FooterView(theme string, name string, data interface{}) {
 	this.footerRender = &TemplateRender{
-		View: view,
+		View: &ThemeItem{theme, "template", name},
 		Data: data}
 }
-func (this *AppLayout) BottomView(view string, data interface{}) {
+func (this *AppLayout) BottomView(theme string, name string, data interface{}) {
 	this.bottomRender = &TemplateRender{
-		View: view,
+		View: &ThemeItem{theme, "template", name},
 		Data: data}
 }
-func (this *AppLayout) SetTop(r IRender) {
+func (this *AppLayout) SetTopRender(r IRender) {
 	this.contextRender = r
 }
-func (this *AppLayout) SetHeader(r IRender) {
+func (this *AppLayout) SetHeaderRender(r IRender) {
 	this.contextRender = r
 }
-func (this *AppLayout) SetContext(r IRender) {
+func (this *AppLayout) SetContextRender(r IRender) {
 	this.contextRender = r
 }
-func (this *AppLayout) SetFooter(r IRender) {
+func (this *AppLayout) SetFooterRender(r IRender) {
 	this.contextRender = r
 }
-func (this *AppLayout) SetBottom(r IRender) {
+func (this *AppLayout) SetBottomRender(r IRender) {
 	this.contextRender = r
 }
 
 func (this *AppLayout) SetHeadLayout(h *HeadLayout) {
 	this.headLayout = h
 }
+
 func (this *AppLayout) RenderLayout(writer io.Writer) {
 	writer.Write([]byte("<!DOCTYPE HTML>\n<html>\n"))
 	this.headLayout.RenderLayout(writer)
