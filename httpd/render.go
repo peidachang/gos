@@ -53,7 +53,7 @@ type JsRender struct {
 
 func (this *JsRender) Render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<script src=\"" + StaticUrl + v.GetPath() + httpServer.Timestamp + "\"></script>\n"))
+		w.Write([]byte("<script src=\"" + StaticUrl + v.GetAssetsPath() + httpServer.Timestamp + "\"></script>\n"))
 	}
 }
 
@@ -65,7 +65,7 @@ type CssRender struct {
 
 func (this *CssRender) Render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<link href=\"" + StaticUrl + v.GetPath() + httpServer.Timestamp + "\" rel=\"stylesheet\"/>\n"))
+		w.Write([]byte("<link href=\"" + StaticUrl + v.GetAssetsPath() + httpServer.Timestamp + "\" rel=\"stylesheet\"/>\n"))
 	}
 }
 

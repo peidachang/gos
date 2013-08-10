@@ -37,6 +37,7 @@ var (
 	httpServer *HttpServer
 	HomeUrl    string
 	StaticUrl  string
+	AssetsName string
 	SiteTheme  string
 	RunMode    string //"dev" or "prod"
 )
@@ -56,6 +57,7 @@ func init() {
 
 	HomeUrl = "/"
 	StaticUrl = "/"
+	AssetsName = "assets"
 
 	if _, err := os.Stat("var"); err != nil {
 		if os.IsNotExist(err) {

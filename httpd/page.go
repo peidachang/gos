@@ -234,6 +234,12 @@ func (this *ThemeItem) GetPath() string {
 	}
 	return "/themes/" + this.Theme + "/" + this.Folder + "/" + this.Value
 }
+func (this *ThemeItem) GetAssetsPath() string {
+	if this.Theme == "" {
+		return "/" + AssetsName + "/" + this.Folder + "/" + this.Value
+	}
+	return "/themes/" + this.Theme + "/" + AssetsName + "/" + this.Folder + "/" + this.Value
+}
 
 type ThemeItems []*ThemeItem
 
