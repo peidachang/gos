@@ -25,7 +25,7 @@ func (this *WebService) Init() {}
 
 func (this *WebService) IsAuth() bool {
 	this.UserAuth = (&UserAuth{}).SetContext(this.Ctx)
-	return this.UserAuth.IsLogin()
+	return this.UserAuth.IsOk()
 }
 
 func (this *WebService) Reply(data interface{}, err error) {

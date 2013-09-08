@@ -18,9 +18,12 @@ import (
 var poolRSAKey []*RSAKey
 var privateSecret string = util.Unique()
 var separator []byte = []byte("|")
-var CookieAuthKey string = "gosauth"
-var CookieUserKey string = "gosuser"
-var UserITypeField string = "IType"
+var UserAuthVO *AuthVO
+
+type AuthVO struct {
+	Table, GroupField, LastsEeatFieLd string
+	CookieKey, CookiePublicKey        string
+}
 
 type RSAKey struct {
 	Key       *rsa.PrivateKey
@@ -29,6 +32,12 @@ type RSAKey struct {
 
 func init() {
 	poolRSAKey = make([]*RSAKey, 3)
+	UserAuthVO = &AuthVO{}
+	UserAuthVO.CookieKey = "gosauth"
+	UserAuthVO.CookiePublicKey = "gospub"
+	UserAuthVO.Table = "Users"
+	UserAuthVO.GroupField = "GroupId"
+	UserAuthVO.LastsEeatFieLd = "LastSeeAt"
 }
 
 func newRSAKey() *rsa.PrivateKey {
@@ -99,27 +108,34 @@ func (this *UserAuth) Auth(cipher []byte) (string, error) {
 
 	user := this.Find(login)
 	if user == nil {
-		return login, MyErr(0, "login name not found").Log("notice")
+		return login, MyErr(0, "login not found").Log("notice")
 	}
 
 	if user.GetString("Token") != this.GenerateUserToken(login, pwd, user.GetString("Salt")) {
 		this.ClearCookie()
 		this.user = nil
-		return login, MyErr(0, "login name password is not matched").Log("notice")
+		return login, MyErr(0, "login and password is not matched").Log("notice")
 	}
 
-	if user.GetInt64(UserITypeField) < 0 {
+	if user.GetInt64(UserAuthVO.GroupField) < 0 {
 		this.ClearCookie()
 		this.user = nil
 		return login, MyErr(0, "user is closed").Log("notice")
 	}
 
 	this.user = user
+
+	data := db.DataRow{}
+	data[UserAuthVO.LastsEeatFieLd] = time.Now()
+	(&db.UpdateBuilder{}).Table(UserAuthVO.Table).
+		Where("Id=?", this.user.GetInt64("Id")).
+		Update(data)
+
 	return login, nil
 }
 
 func (this *UserAuth) Find(login string) db.DataRow {
-	find := (&db.QueryBuilder{}).Table("Users").Where("login=?", login).Cache(300)
+	find := (&db.QueryBuilder{}).Table(UserAuthVO.Table).Where("Login=?", login).Cache(300)
 
 	row, err := find.QueryOne()
 	if err != nil {
@@ -140,49 +156,53 @@ func (this *UserAuth) SetCookie(age int64) {
 		unix = ts + age
 	}
 
-	this.ctx.SetCookie(CookieAuthKey, fmt.Sprintf("%s|%d|%s", this.UserName(), ts, this.createAuthToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "", true)
-	this.ctx.SetCookie(CookieUserKey, fmt.Sprint(this.UserName(), "|", this.UserType()), unix, "/", "", false)
+	this.ctx.SetCookie(UserAuthVO.CookieKey, fmt.Sprintf("%s|%d|%s", this.UserName(), ts, this.createAuthToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "", true)
+	this.ctx.SetCookie(UserAuthVO.CookiePublicKey, fmt.Sprint(this.UserName(), "|", this.GroupId()), unix, "/", "", false)
 }
 
 func (this *UserAuth) ClearCookie() {
-	this.ctx.SetCookie(CookieAuthKey, "", -1, "/", "", true)
-	this.ctx.SetCookie(CookieUserKey, "", -1, "/", "", false)
+	this.ctx.SetCookie(UserAuthVO.CookieKey, "", -1, "/", "", true)
+	this.ctx.SetCookie(UserAuthVO.CookiePublicKey, "", -1, "/", "", false)
 }
 
-func (this *UserAuth) IsLogin() bool {
+func (this *UserAuth) IsOk() bool {
 	return len(this.CurrentUser()) > 0
 }
 
-func (this *UserAuth) IsNotLogin() bool {
+func (this *UserAuth) NotOk() bool {
 	return len(this.CurrentUser()) == 0
 }
 
 func (this *UserAuth) UserId() int64 {
-	if this.IsLogin() {
-		return this.user["Id"].(int64)
+	if this.IsOk() {
+		return this.user.GetInt64("Id")
 	}
 	return -1
 }
 
 func (this *UserAuth) UserName() string {
-	if this.IsLogin() {
+	if this.IsOk() {
 		return this.user.GetString("Login")
 	}
 	return ""
 }
 
-func (this *UserAuth) UserType() int64 {
-	if this.IsLogin() {
-		return this.user.GetInt64(UserITypeField)
+func (this *UserAuth) GroupId() int64 {
+	if this.IsOk() {
+		return this.user.GetInt64(UserAuthVO.GroupField)
 	}
 	return -1
+}
+
+func (this *UserAuth) User() db.DataRow {
+	return this.CurrentUser()
 }
 
 func (this *UserAuth) CurrentUser() db.DataRow {
 	if len(this.user) > 0 {
 		return this.user
 	}
-	v, err := this.ctx.Request.Cookie(CookieAuthKey)
+	v, err := this.ctx.Request.Cookie(UserAuthVO.CookieKey)
 	if err != nil {
 		return this.user
 	}
@@ -249,4 +269,46 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 	}
 
 	return int64(ts), b[n+1 : n+1+l], nil
+}
+
+func (this *UserAuth) Regist(login string, email string, cipher string) error {
+	if login == "" || email == "" {
+		return MyErr(0, "login or email is empty")
+	}
+
+	find := (&db.QueryBuilder{}).Table(UserAuthVO.Table)
+	if isExist, _ := find.Exists("Login=? or Email=?", login, email); isExist {
+		return MyErr(0, "login or email exists")
+	}
+
+	_, text, err := this.PraseCipher([]byte(cipher))
+	if err != nil {
+		return MyErr(0, err)
+	}
+
+	now := time.Now()
+	salt := util.Unique()
+
+	insert := &db.InsertBuilder{}
+	row := db.DataRow{}
+	row["Login"] = login
+	row["Email"] = email
+	row["Salt"] = salt
+	row["Token"] = this.GenerateUserToken(login, string(text), salt)
+	row["CreatedAt"] = now
+	row[UserAuthVO.LastsEeatFieLd] = now
+	row[UserAuthVO.GroupField] = int64(2)
+
+	if arr, _ := (&db.QueryBuilder{}).Table(UserAuthVO.Table).Limit(1).Query(); len(arr) == 0 {
+		row[UserAuthVO.GroupField] = int64(1)
+	}
+
+	_, err = insert.Table(UserAuthVO.Table).Insert(row)
+	if err != nil {
+		return MyErr(0, err.Error())
+	}
+	this.SetUser(row)
+	this.SetCookie(0)
+
+	return nil
 }

@@ -24,5 +24,8 @@ func (this *Sqlite3) LimitOffsetStatement(limit int, offset int) string {
 	} else {
 		return " offset " + strconv.Itoa(offset)
 	}
+}
 
+func (this *Sqlite3) QuoteField(s string) string {
+	return `"` + s + `"`
 }

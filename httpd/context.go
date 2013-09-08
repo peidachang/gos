@@ -71,10 +71,10 @@ func (ctx *Context) SetCookie(name string, value string, age int64, path string,
 	http.SetCookie(ctx.ResponseWriter, cookie)
 }
 
-func (ctx *Context) IsUserLogin(loginpath string) bool {
-	if auth := (&UserAuth{}).SetContext(ctx); auth.IsNotLogin() {
+func (ctx *Context) CheckLogin(path string) bool {
+	if auth := (&UserAuth{}).SetContext(ctx); auth.NotOk() {
 		auth.ClearCookie()
-		ctx.Redirect(loginpath + "?redirect=" + ctx.Request.URL.RequestURI())
+		ctx.Redirect(path + "?redirect=" + ctx.Request.URL.RequestURI())
 		return false
 	}
 	return true

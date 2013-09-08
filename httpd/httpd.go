@@ -21,6 +21,7 @@ type HttpServer struct {
 	Port       int
 	EnableGzip bool
 	PprofOn    bool
+	GlobalData db.DataRow
 
 	StaticDir string
 	Timestamp string
@@ -94,6 +95,9 @@ func Init() {
 	}
 	if appConf.IsSet("static_url") {
 		StaticUrl = appConf.GetString("static_url")
+	}
+	if appConf.IsSet("assets") {
+		AssetsName = appConf.GetString("assets")
 	}
 
 	if httpConf.IsSet("static") {
@@ -354,8 +358,8 @@ func (this *MyError) Write(w io.Writer) *MyError {
 	return this
 }
 
-func (this *MyError) Log(level string) *MyError {
-	switch level {
+func (this *MyError) Log(strlevel string) *MyError {
+	switch strlevel {
 	case "alert":
 		log.App.Alert("MYERR", this.Code, fmt.Sprint(this.Messages...))
 	case "crit":
