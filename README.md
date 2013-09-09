@@ -87,7 +87,9 @@ db.QueryX(&UserVO{}, "select * from Users") //return []*UserVO
 
 ```
 ## log package useage
+```go
 log.Init("folder", []string{"web", "sql"}, "dev")
 log.Level = 10
 log.Use("sql")
 log.App.Error("error", "code", 2)
+```
