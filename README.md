@@ -2,28 +2,31 @@
 
 ## db package useage
 
-** init db **
 ```go
 type DataSet []interface{}
 type DataRow map[string]interface{}
 ```
-** sqlite3 **
+**sqlite3**
 ```go
 conf:=make(map[string]string)
 conf["driver"] = "sqlite3"
 conf["file"] = "file=./app.db"
 ```
-** sqlite3 **
+**postgres**
 ```go
 conf:=make(map[string]string)
+conf["dbname"] = "postgres"
 conf["dbname"] = "mydb"
 conf["host"] = "127.0.0.1"
 conf["port"] = "5432"
 conf["user"] = "postgres"
 conf["password"] = "123"
 ```
+**init db pool**
 ```go
 db.New("app", conf)
+db.New("app2", conf2)
+db.Use(0)
 ```
 #### 1. query
 ```go
