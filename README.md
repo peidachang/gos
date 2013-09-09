@@ -86,6 +86,16 @@ db.Query("select * from Users") //return []DataRow
 db.QueryX(&UserVO{}, "select * from Users") //return []*UserVO
 
 ```
+
+#### 7. db cache
+```go
+q.Cache(300).Query() // cache result
+```
+clear cache
+```go
+q.ClearCache()
+```
+
 ## log package useage
 ```go
 log.Init("folder", []string{"web", "sql"}, "dev")
