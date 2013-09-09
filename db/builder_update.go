@@ -3,7 +3,6 @@ package db
 import (
 	"bytes"
 	"database/sql"
-	"strings"
 )
 
 // Update builder
@@ -24,21 +23,12 @@ func (this *UpdateBuilder) Where(cond string, args ...interface{}) *UpdateBuilde
 }
 
 func (this *UpdateBuilder) Update(data interface{}) (sql.Result, error) {
-	var row DataRow
-	switch inst := data.(type) {
-	case DataRow:
-		row = inst
-	case map[string]interface{}:
-		row = DataRow(inst)
-	default:
-		row = structToDataRow(inst)
-	}
+	keys, values, _ := keyValueList(data)
 
-	keys, values, _ := keyValueList(row)
-
-	arr := make([]string, len(row))
+	arr := make([][]byte, len(keys))
+	str := []byte("=?")
 	for i, _ := range keys {
-		arr[i] = keys[i] + "=?"
+		arr[i] = append(keys[i], str...)
 	}
 	var cond string = ""
 	if this.where != nil {
@@ -51,7 +41,7 @@ func (this *UpdateBuilder) Update(data interface{}) (sql.Result, error) {
 	s.WriteString("update ")
 	s.WriteString(driver.QuoteField(this.table))
 	s.WriteString(" set ")
-	s.WriteString(strings.Join(arr, ","))
+	s.Write(bytes.Join(arr, commaSplit))
 	s.WriteString(cond)
 
 	return this.GetDatabase().ExecPrepare(s.String(), values...)

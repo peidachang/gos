@@ -2,6 +2,11 @@
 
 ## db package useage
 
+**begin use db package, you need import db driver**
+```go
+import(_ "github.com/mattn/go-sqlite3")
+```
+
 ```go
 type DataSet []interface{}
 type DataRow map[string]interface{}
@@ -31,7 +36,7 @@ db.Use(0)
 #### 1. query
 ```go
 q:=&db.QueryBuilder{}   
-q.Table("Users").Where("name=? and age=?", "tom", 22).Query()** //return []DataRow
+q.Table("Users").Where("name=? and age=?", "tom", 22).Query() //return []DataRow
 q.QueryOne() //return DataRow   
 ```
 
@@ -42,6 +47,7 @@ type UserVO struct{
 	Age float64 `db:"age"`
 	Created time.Time `db:"created_at"`
 }
+// select name,age,created_at from Usres
 q := (&db.QueryBuilder{}).Table("Users")
 q.Struct(&UserVO{}) // or
 q.Struct(UserVO{})
@@ -78,4 +84,10 @@ db.Query("select * from Users") //return []DataRow
 ```
 ```go
 db.QueryX(&UserVO{}, "select * from Users") //return []*UserVO
+
 ```
+## log package useage
+log.Init("folder", []string{"web", "sql"}, "dev")
+log.Level = 10
+log.Use("sql")
+log.App.Error("error", "code", 2)

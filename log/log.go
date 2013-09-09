@@ -49,3 +49,6 @@ func Add(name string) *Logger {
 	l.Init(Folder + name + ".log")
 	return l
 }
+func Use(n string) {
+	App = pool[n]
+}

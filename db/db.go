@@ -18,6 +18,8 @@ var (
 	dblog  *log.Logger
 )
 
+var commaSplit []byte = []byte(",")
+
 func init() {
 	dblog = nil
 	dbpool = &databasePool{dblist: make([]*Database, 0)}
@@ -72,6 +74,13 @@ func Query(sqlstr string, args ...interface{}) (DataSet, error) {
 // You can set another database by Use(i) or New(name, conf) an new database
 func QueryPrepare(sqlstr string, args ...interface{}) (DataSet, error) {
 	return Current().QueryPrepare(sqlstr, args...)
+}
+
+func QueryX(cls interface{}, sqlstr string, args ...interface{}) (DataSet, error) {
+	return Current().QueryX(cls, sqlstr, args...)
+}
+func QueryPrepareX(cls interface{}, sqlstr string, args ...interface{}) (DataSet, error) {
+	return Current().QueryPrepareX(cls, sqlstr, args...)
 }
 
 // Excute sql from a file

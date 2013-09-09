@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jiorry/gos/cache"
 	"github.com/jiorry/gos/util"
+	"strings"
 )
 
 // Query builder
@@ -18,7 +19,7 @@ type QueryBuilder struct {
 	cache      bool
 	expire     int
 	ctype      string
-	dataStruct interface{}
+	dataStruct *structMaps
 
 	builder
 }
@@ -59,8 +60,10 @@ func (this *QueryBuilder) Offset(n int) *QueryBuilder {
 	return this
 }
 
-func (this *QueryBuilder) DataStruct(v interface{}) *QueryBuilder {
-	this.dataStruct = v
+func (this *QueryBuilder) Struct(v interface{}) *QueryBuilder {
+	ds := &structMaps{}
+	ds.SetTarget(v)
+	this.dataStruct = ds
 	return this
 }
 
@@ -76,6 +79,9 @@ func (this *QueryBuilder) cachekey() string {
 
 func (this *QueryBuilder) parse() string {
 	sel := "*"
+	if this.dataStruct != nil {
+		sel = strings.Join(this.dataStruct.Fields(), ",")
+	}
 	conditions := ""
 	order := ""
 	limitoffset := ""

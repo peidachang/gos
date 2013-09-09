@@ -27,6 +27,7 @@ func (this *TemplateRender) Render(w io.Writer) {
 		}
 	}()
 	filepath := httpServer.StaticDir + this.View.GetPath() + ".htm"
+
 	tmpl, _ := template.ParseFiles(filepath)
 	err := tmpl.Execute(w, this.Data)
 	if err != nil {

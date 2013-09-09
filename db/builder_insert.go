@@ -3,7 +3,6 @@ package db
 import (
 	"bytes"
 	"database/sql"
-	"strings"
 )
 
 // insert builder
@@ -17,32 +16,22 @@ func (this *InsertBuilder) Table(t string) *InsertBuilder {
 	return this
 }
 
-func (this *InsertBuilder) parse(data DataRow) (code string, values []interface{}) {
+func (this *InsertBuilder) parse(data interface{}) (code string, values []interface{}) {
 	keys, values, stmts := keyValueList(data)
 	s := bytes.Buffer{}
 	driver := this.builder.GetDatabase().Driver
 	s.WriteString("insert into ")
 	s.WriteString(driver.QuoteField(this.table))
 	s.WriteString(" (")
-	s.WriteString(strings.Join(keys, ","))
+	s.Write(bytes.Join(keys, commaSplit))
 	s.WriteString(") values (")
-	s.WriteString(strings.Join(stmts, ","))
+	s.Write(bytes.Join(stmts, commaSplit))
 	s.WriteString(")")
 	return s.String(), values
 }
 
 func (this *InsertBuilder) Insert(data interface{}) (sql.Result, error) {
-	var row DataRow
-	switch inst := data.(type) {
-	case DataRow:
-		row = inst
-	case map[string]interface{}:
-		row = DataRow(inst)
-	default:
-		row = structToDataRow(inst)
-	}
-
-	sql, args := this.parse(row)
+	sql, args := this.parse(data)
 	return this.GetDatabase().ExecPrepare(sql, args...)
 }
 

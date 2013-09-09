@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"github.com/jiorry/gos/log"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -57,9 +56,17 @@ func (this *Database) QueryPrepareX(cls interface{}, sqlstr string, args ...inte
 
 	var result DataSet
 	if cls == nil {
-		result, err = rowToMap(rows)
+		result, err = ScanRowsToMap(rows)
 	} else {
-		result, err = rowToStruct(rows, cls)
+		var sm *structMaps
+		switch inst := cls.(type) {
+		case *structMaps:
+			sm = inst
+		default:
+			sm = &structMaps{}
+			sm.SetTarget(cls)
+		}
+		result, err = sm.ScanRowsToStruct(rows)
 	}
 	if err != nil {
 		return nil, err
@@ -94,9 +101,17 @@ func (this *Database) QueryX(cls interface{}, sqlstr string, args ...interface{}
 
 	var result DataSet
 	if cls == nil {
-		result, err = rowToMap(rows)
+		result, err = ScanRowsToMap(rows)
 	} else {
-		result, err = rowToStruct(rows, cls)
+		var sm *structMaps
+		switch inst := cls.(type) {
+		case *structMaps:
+			sm = inst
+		default:
+			sm = &structMaps{}
+			sm.SetTarget(cls)
+		}
+		result, err = sm.ScanRowsToStruct(rows)
 	}
 	if err != nil {
 		return nil, err
@@ -208,7 +223,7 @@ func (this DataSet) Encode() [][]interface{} {
 	return values
 }
 
-func rowToMap(rows *sql.Rows) (DataSet, error) {
+func ScanRowsToMap(rows *sql.Rows) (DataSet, error) {
 	cols, _ := rows.Columns()
 	colsNum := len(cols)
 
@@ -244,83 +259,4 @@ func rowToMap(rows *sql.Rows) (DataSet, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-type structFiledMaps struct {
-	fieldInfos map[string][]int
-}
-
-func (this *structFiledMaps) Parse(typ reflect.Type) {
-	this.fieldInfos = make(map[string][]int)
-	n := typ.NumField()
-	for i := 0; i < n; i++ {
-		f := typ.Field(i)
-		field := f.Tag.Get("db")
-		if field == "" {
-			field = f.Name
-		}
-
-		this.fieldInfos[field] = f.Index
-	}
-}
-func (this *structFiledMaps) GetFieldIndex(colName string) []int {
-	for k, v := range this.fieldInfos {
-		if k == colName {
-			return v
-		}
-	}
-	return make([]int, 0)
-}
-
-func rowToStruct(rows *sql.Rows, cls interface{}) (DataSet, error) {
-	typ := reflect.TypeOf(cls)
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-	}
-
-	sf := &structFiledMaps{}
-	sf.Parse(typ)
-
-	cols, _ := rows.Columns()
-	result := DataSet{}
-	var err error
-	var fieldIndex []int
-	values := make([]interface{}, len(cols))
-
-	for rows.Next() {
-		rowStruct := reflect.New(typ)
-
-		for i, c := range cols {
-			fieldIndex = sf.GetFieldIndex(c)
-			values[i] = rowStruct.Elem().FieldByIndex(fieldIndex).Addr().Interface()
-		}
-
-		if err = rows.Scan(values...); err != nil {
-			log.App.Error(err)
-			return nil, err
-		}
-
-		result = append(result, rowStruct.Interface())
-	}
-
-	if err = rows.Err(); err != nil {
-		log.App.Error(err)
-		log.App.Stack()
-		return nil, err
-	}
-	return result, nil
-}
-
-func structToDataRow(u interface{}) DataRow {
-	typ := reflect.TypeOf(u)
-	v := reflect.ValueOf(u)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-		typ = typ.Elem()
-	}
-	datarow := DataRow{}
-	for i := 0; i < v.NumField(); i++ {
-		datarow[typ.Field(i).Name] = v.Field(i).Interface()
-	}
-	return datarow
 }
