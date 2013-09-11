@@ -38,18 +38,12 @@ func (this *Database) QueryPrepare(sqlstr string, args ...interface{}) (DataSet,
 func (this *Database) QueryPrepareX(cls interface{}, sqlstr string, args ...interface{}) (DataSet, error) {
 	s, err := this.Conn.Prepare(sqlstr)
 	if err != nil {
-		log.App.Alert(err)
-		log.App.Alert(sqlstr)
-		log.App.Alert(args...)
-		log.App.Stack()
+		log.App.Alert(err, "sql:", sqlstr, args)
 		return nil, err
 	}
 	rows, err := s.Query(args...)
 	if err != nil {
-		log.App.Alert(err)
-		log.App.Alert(sqlstr)
-		log.App.Alert(args...)
-		log.App.Stack()
+		log.App.Alert(err, "sql:", sqlstr, args)
 		return nil, err
 	}
 	defer rows.Close()
@@ -91,10 +85,7 @@ func (this *Database) QueryX(cls interface{}, sqlstr string, args ...interface{}
 	rows, err = this.Conn.Query(sqlstr, args...)
 
 	if err != nil {
-		log.App.Alert(err)
-		log.App.Alert(sqlstr)
-		log.App.Alert(args...)
-		log.App.Stack()
+		log.App.Alert(err, "sql:", sqlstr, args)
 		return nil, err
 	}
 	defer rows.Close()
@@ -129,7 +120,6 @@ func (this *Database) ExecPrepare(sqlstr string, args ...interface{}) (sql.Resul
 	r, err := s.Exec(args...)
 	if err != nil {
 		log.App.Alert("db exec error:", err, "\n", "sql:"+sqlstr+"|")
-		log.App.Stack()
 		return nil, err
 	}
 	return r, nil
@@ -141,7 +131,6 @@ func (this *Database) Exec(sqlstr string, args ...interface{}) (sql.Result, erro
 	r, err := this.Conn.Exec(sqlstr, args...)
 	if err != nil {
 		log.App.Alert("db exec error:", err, "\n", "sql:"+sqlstr+"|")
-		log.App.Stack()
 		return nil, err
 	}
 	return r, nil
@@ -221,42 +210,4 @@ func (this DataSet) Encode() [][]interface{} {
 	}
 
 	return values
-}
-
-func ScanRowsToMap(rows *sql.Rows) (DataSet, error) {
-	cols, _ := rows.Columns()
-	colsNum := len(cols)
-
-	result := DataSet{}
-	var err error
-	var row, tem []interface{}
-	var rowData map[string]interface{}
-
-	for rows.Next() {
-		row = make([]interface{}, colsNum)
-		tem = make([]interface{}, colsNum)
-
-		for i := range row {
-			tem[i] = &row[i]
-		}
-
-		if err = rows.Scan(tem...); err != nil {
-			log.App.Error(err)
-			return nil, err
-		}
-
-		rowData = make(map[string]interface{})
-		for i := range cols {
-			rowData[cols[i]] = row[i]
-		}
-
-		result = append(result, rowData)
-	}
-
-	if err = rows.Err(); err != nil {
-		log.App.Error(err)
-		log.App.Stack()
-		return nil, err
-	}
-	return result, nil
 }

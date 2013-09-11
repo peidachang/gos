@@ -2,14 +2,14 @@ package cache
 
 type ICache interface {
 	Init(map[string]string) bool
-	Get(string) (interface{}, error)
-	GetString(string) (string, error)
-	GetInt(string) (int, error)
-	GetInt64(string) (int64, error)
-	GetFloat64(string) (float64, error)
-	Set(string, interface{}, int) error
-	Exists(string) (bool, error)
-	Delete(string) error
+	Get([]byte) (interface{}, error)
+	GetString([]byte) (string, error)
+	GetInt([]byte) (int, error)
+	GetInt64([]byte) (int64, error)
+	GetFloat64([]byte) (float64, error)
+	Set([]byte, interface{}, int) error
+	Exists([]byte) (bool, error)
+	Delete([]byte) error
 }
 
 var (
@@ -28,34 +28,34 @@ func IsEnable() bool {
 	return cache != nil
 }
 
-func Exists(key string) (bool, error) {
-	return cache.Exists(key)
+func Exists(bkey []byte) (bool, error) {
+	return cache.Exists(bkey)
 }
 
-func Get(key string) (interface{}, error) {
-	return cache.Get(key)
+func Get(bkey []byte) (interface{}, error) {
+	return cache.Get(bkey)
 }
 
-func GetString(key string) (string, error) {
-	return cache.GetString(key)
+func GetString(bkey []byte) (string, error) {
+	return cache.GetString(bkey)
 }
 
-func GetInt(key string) (int, error) {
-	return cache.GetInt(key)
+func GetInt(bkey []byte) (int, error) {
+	return cache.GetInt(bkey)
 }
 
-func GetInt64(key string) (int64, error) {
-	return cache.GetInt64(key)
+func GetInt64(bkey []byte) (int64, error) {
+	return cache.GetInt64(bkey)
 }
 
-func GetFloat64(key string) (float64, error) {
-	return cache.GetFloat64(key)
+func GetFloat64(bkey []byte) (float64, error) {
+	return cache.GetFloat64(bkey)
 }
 
-func Set(key string, value interface{}, expire int) error {
-	return cache.Set(key, value, expire)
+func Set(bkey []byte, value interface{}, expire int) error {
+	return cache.Set(bkey, value, expire)
 }
 
-func Delete(key string) error {
-	return cache.Delete(key)
+func Delete(bkey []byte) error {
+	return cache.Delete(bkey)
 }

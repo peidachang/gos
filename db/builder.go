@@ -1,20 +1,12 @@
 package db
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/gob"
+	"encoding/json"
 	"github.com/jiorry/gos/cache"
 	"github.com/jiorry/gos/log"
 	"reflect"
-	"time"
 )
-
-func init() {
-	gob.Register(DataRow{})
-	gob.Register(DataSet{})
-	gob.Register(time.Time{})
-}
 
 type builder struct {
 	database *Database
@@ -59,66 +51,7 @@ func keyValueList(data interface{}) (keys [][]byte, values []interface{}, stmts 
 	return
 }
 
-func cacheSet(key string, value interface{}, expire int) error {
-	if !cache.IsEnable() {
-		return nil
-	}
-
-	if !cache.IsEnable() {
-		return nil
-	}
-	v, err := gobEncode(value)
-	if err != nil {
-		log.App.Crit(err)
-		return err
-	}
-	err = cache.Set(key, v, expire)
-	if err != nil {
-		log.App.Crit(err)
-	}
-	return err
-}
-
-func cacheGetDBResult(key string) (DataSet, error) {
-	out := DataSet{}
-	reply, err := cache.Get(key)
-	if reply == nil || err != nil {
-		return nil, err
-	}
-
-	dec := gob.NewDecoder(bytes.NewBuffer(reply.([]byte)))
-	err = dec.Decode(&out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func cacheGetDBRow(key string) (DataRow, error) {
-	var out = DataRow{}
-	reply, err := cache.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	dec := gob.NewDecoder(bytes.NewBuffer(reply.([]byte)))
-	err = dec.Decode(&out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func gobEncode(obj interface{}) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	enc := gob.NewEncoder(buf)
-	err := enc.Encode(obj)
-	if err != nil {
-		return []byte(""), err
-	}
-	return buf.Bytes(), nil
-}
-
-func rowsToMap(rows *sql.Rows) (DataSet, error) {
+func ScanRowsToMap(rows *sql.Rows) (DataSet, error) {
 	cols, _ := rows.Columns()
 	colsNum := len(cols)
 
@@ -160,35 +93,49 @@ type structMaps struct {
 	typ        reflect.Type
 	val        reflect.Value
 	fieldIndex map[string][]int
-	fields     []string
+	fields     [][]byte
 }
 
 func (this *structMaps) SetTarget(cls interface{}) {
 	this.typ = reflect.TypeOf(cls)
-	if this.typ.Kind() == reflect.Ptr {
-		this.typ = this.typ.Elem()
-	}
 
 	this.val = reflect.ValueOf(cls)
 	if this.val.Kind() == reflect.Ptr {
 		this.val = this.val.Elem()
 	}
 }
+func (this *structMaps) GetTypeElem() reflect.Type {
+	if this.typ.Kind() == reflect.Ptr {
+		return this.typ.Elem()
+	} else {
+		return this.typ
+	}
+}
+
+func (this *structMaps) GetType() reflect.Type {
+	return this.typ
+}
+
+func (this *structMaps) GetValue() reflect.Value {
+	return this.val
+}
+
 func (this *structMaps) buildFieldInfo() {
-	n := this.typ.NumField()
+	typ := this.GetTypeElem()
+	n := typ.NumField()
 	this.fieldIndex = make(map[string][]int)
-	this.fields = make([]string, n)
+	this.fields = make([][]byte, n)
 	for i := 0; i < n; i++ {
-		f := this.typ.Field(i)
+		f := typ.Field(i)
 		field := f.Tag.Get("db")
 		if field == "" {
 			field = f.Name
 		}
-		this.fields[i] = field
+		this.fields[i] = []byte(field)
 		this.fieldIndex[field] = f.Index
 	}
 }
-func (this *structMaps) Fields() []string {
+func (this *structMaps) Fields() [][]byte {
 	if this.fields == nil {
 		this.buildFieldInfo()
 	}
@@ -214,7 +161,7 @@ func (this *structMaps) ScanRowsToStruct(rows *sql.Rows) (DataSet, error) {
 	values := make([]interface{}, len(cols))
 
 	for rows.Next() {
-		rowStruct := reflect.New(this.typ)
+		rowStruct := reflect.New(this.GetTypeElem())
 
 		for i, c := range cols {
 			fieldIndex = this.GetFieldIndex(c)
@@ -238,15 +185,69 @@ func (this *structMaps) ScanRowsToStruct(rows *sql.Rows) (DataSet, error) {
 }
 
 func (this *structMaps) KeyValueList() (keys [][]byte, values []interface{}, stmts [][]byte) {
-	l := this.typ.NumField()
+	typ := this.GetTypeElem()
+	l := typ.NumField()
 	keys = make([][]byte, l)
 	values = make([]interface{}, l)
 	stmts = make([][]byte, l)
 
 	for i := 0; i < l; i++ {
-		keys[i] = []byte(this.typ.Field(i).Name)
+		keys[i] = []byte(typ.Field(i).Name)
 		values[i] = this.val.Field(i).Interface()
 		stmts[i] = []byte("?")
 	}
 	return
+}
+
+func cacheDel(bkey []byte) error {
+	return cache.Delete(bkey)
+}
+
+func cacheSet(bkey []byte, value interface{}, expire int) error {
+	if !cache.IsEnable() {
+		return nil
+	}
+
+	if !cache.IsEnable() {
+		return nil
+	}
+	v, err := json.Marshal(value)
+	if err != nil {
+		log.App.Crit(err)
+		return err
+	}
+	err = cache.Set(bkey, v, expire)
+	if err != nil {
+		log.App.Crit(err)
+	}
+	return err
+}
+
+func cacheGet(bkey []byte, smap *structMaps) (DataSet, error) {
+	reply, err := cache.Get(bkey)
+	if reply == nil || err != nil {
+		return nil, err
+	}
+
+	if smap == nil {
+		d := DataSet{}
+		if err := json.Unmarshal(reply.([]byte), &d); err != nil {
+			return nil, err
+		}
+		return d, nil
+	} else {
+		styp := reflect.SliceOf(smap.GetType())
+		obj := reflect.New(styp).Interface()
+		if err := json.Unmarshal(reply.([]byte), obj); err != nil {
+			return nil, err
+		}
+		val := reflect.ValueOf(obj).Elem()
+		l := val.Len()
+		d := make([]interface{}, l)
+		for i := 0; i < l; i++ {
+			d[i] = val.Index(i).Interface()
+		}
+		return d, nil
+	}
+
 }

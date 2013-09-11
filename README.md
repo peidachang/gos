@@ -11,36 +11,14 @@ import(_ "github.com/mattn/go-sqlite3")
 type DataSet []interface{}
 type DataRow map[string]interface{}
 ```
-**sqlite3**
-```go
-conf:=make(map[string]string)
-conf["driver"] = "sqlite3"
-conf["file"] = "file=./app.db"
-```
-**postgres**
-```go
-conf:=make(map[string]string)
-conf["dbname"] = "postgres"
-conf["dbname"] = "mydb"
-conf["host"] = "127.0.0.1"
-conf["port"] = "5432"
-conf["user"] = "postgres"
-conf["password"] = "123"
-```
-**init db pool**
-```go
-db.New("app", conf)
-db.New("app2", conf2)
-db.Use(0)
-```
 #### 1. query
 ```go
 q:=&db.QueryBuilder{}   
 q.Table("Users").Where("name=? and age=?", "tom", 22).Query() //return []DataRow
-q.QueryOne() //return DataRow   
+q.QueryOne() //return DataRow.(map[string]interface{})   
 ```
 
-#### 2. query and return DataSet with Struct Row Data   
+#### 2. query result with struct   
 ```go
 type UserVO struct{
 	Name string `db:"name"`
@@ -94,6 +72,28 @@ q.Cache(300).Query() // cache result
 clear cache
 ```go
 q.ClearCache()
+```
+**sqlite3**
+```go
+conf:=make(map[string]string)
+conf["driver"] = "sqlite3"
+conf["file"] = "file=./app.db"
+```
+**postgres**
+```go
+conf:=make(map[string]string)
+conf["dbname"] = "postgres"
+conf["dbname"] = "mydb"
+conf["host"] = "127.0.0.1"
+conf["port"] = "5432"
+conf["user"] = "postgres"
+conf["password"] = "123"
+```
+**init db pool**
+```go
+db.New("app", conf)
+db.New("app2", conf2)
+db.Use(0)
 ```
 
 ## log package useage

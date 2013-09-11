@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jiorry/gos/cache"
 	"github.com/jiorry/gos/util"
-	"strings"
 )
 
 // Query builder
@@ -73,70 +72,70 @@ func (this *QueryBuilder) Cache(expire int) *QueryBuilder {
 	return this
 }
 
-func (this *QueryBuilder) cachekey() string {
-	return util.MD5String(fmt.Sprintf("%v%v%v%v%v", this.field, this.where, this.limit, this.offset, this.order))
+func (this *QueryBuilder) cachekey() []byte {
+	s := bytes.Buffer{}
+	s.WriteString(this.table)
+	this.writeField(&s)
+	s.WriteString(fmt.Sprintf("%d%d", this.limit, this.offset))
+	s.WriteString(this.order)
+	if this.where != nil {
+		s.WriteString(fmt.Sprintf("%s%v", this.where.code, this.where.args))
+	}
+	return util.MD5(s.Bytes())
 }
 
-func (this *QueryBuilder) parse() string {
-	sel := "*"
-	if this.dataStruct != nil {
-		sel = strings.Join(this.dataStruct.Fields(), ",")
-	}
-	conditions := ""
-	order := ""
-	limitoffset := ""
+func (this *QueryBuilder) ClearCache() error {
+	return cacheDel(this.cachekey())
+}
 
+func (this *QueryBuilder) parse() []byte {
 	s := bytes.Buffer{}
+	driver := this.GetDatabase().Driver
+	s.WriteString("select ")
 
-	if len(this.field) > 0 {
-		sel = this.field
-	}
+	this.writeField(&s)
+
+	s.WriteString(" from ")
+	s.WriteString(driver.QuoteField(this.table))
 
 	if this.where != nil {
-		conditions = " where " + this.where.code
+		s.WriteString(" where ")
+		s.WriteString(this.where.code)
+	}
+	if this.order != "" {
+		s.WriteString(" order by ")
+		s.WriteString(this.order)
 	}
 
 	if this.limit > 0 || this.offset > 0 {
-		limitoffset = this.GetDatabase().Driver.LimitOffsetStatement(this.limit, this.offset)
+		s.WriteString(this.GetDatabase().Driver.LimitOffsetStatement(this.limit, this.offset))
 	}
 
-	if len(this.order) > 0 {
-		order = " order by " + this.order
-	}
-
-	driver := this.GetDatabase().Driver
-	s.WriteString("select ")
-	s.WriteString(sel)
-	s.WriteString(" from ")
-	s.WriteString(driver.QuoteField(this.table))
-	s.WriteString(conditions)
-	s.WriteString(order)
-	s.WriteString(limitoffset)
-
-	return s.String()
+	return s.Bytes()
 }
 
 func (this *QueryBuilder) Query() (DataSet, error) {
-	var key string
+	var key []byte
 	if this.cache && cache.IsEnable() {
 		key = this.cachekey()
 		if exi, _ := cache.Exists(key); exi {
-			return cacheGetDBResult(key)
+			return cacheGet(key, this.dataStruct)
 		}
 	}
 	var r DataSet
 	var err error
+	sql := string(this.parse())
 	if this.where == nil {
 		if this.dataStruct == nil {
-			r, err = this.GetDatabase().QueryPrepare(this.parse())
+			r, err = this.GetDatabase().QueryPrepare(sql)
 		} else {
-			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, this.parse())
+			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, sql)
 		}
 	} else {
 		if this.dataStruct == nil {
-			r, err = this.GetDatabase().QueryPrepare(this.parse(), this.where.args...)
+			r, err = this.GetDatabase().QueryPrepare(sql, this.where.args...)
 		} else {
-			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, this.parse(), this.where.args...)
+			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, sql, this.where.args...)
 		}
 	}
 
@@ -148,9 +147,11 @@ func (this *QueryBuilder) Query() (DataSet, error) {
 	}
 	return r, nil
 }
+
 func (this *QueryBuilder) First() (DataRow, error) {
 	return this.QueryOne()
 }
+
 func (this *QueryBuilder) QueryOne() (DataRow, error) {
 	this.limit = 1
 	result, err := this.Query()
@@ -172,4 +173,14 @@ func (this *QueryBuilder) Exists(s string, args ...interface{}) (bool, error) {
 	this.field = "1"
 	r, err := this.Query()
 	return len(r) > 0, err
+}
+
+func (this *QueryBuilder) writeField(s *bytes.Buffer) {
+	if this.dataStruct != nil {
+		s.Write(bytes.Join(this.dataStruct.Fields(), commaSplit))
+	} else if this.field != "" {
+		s.WriteString(this.field)
+	} else {
+		s.WriteString("*")
+	}
 }
