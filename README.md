@@ -2,7 +2,7 @@
 
 ## db package useage
 
-**begin use db package, you need import db driver**
+**begin use db package, you need install and import db driver by your self, like this:**
 ```go
 import(_ "github.com/mattn/go-sqlite3")
 ```
@@ -77,17 +77,22 @@ q.ClearCache()
 ```go
 conf:=make(map[string]string)
 conf["driver"] = "sqlite3"
-conf["file"] = "file=./app.db"
+conf["file"] = "./app.db"
+// or 
+conf["driver"] = "sqlite3"
+conf["connect"] = "file=./app.db"
 ```
 **postgres**
 ```go
 conf:=make(map[string]string)
-conf["dbname"] = "postgres"
+conf["driver"] = "postgres"
 conf["dbname"] = "mydb"
 conf["host"] = "127.0.0.1"
 conf["port"] = "5432"
 conf["user"] = "postgres"
 conf["password"] = "123"
+// or
+conf["connect"] = "dbname=mydb user=postgres password=123 host=127.0.0.1 port=5432 sslmode=disable"
 ```
 **init db pool**
 ```go
@@ -102,4 +107,23 @@ log.Init("folder", []string{"web", "sql"}, "dev")
 log.Level = 10
 log.Use("sql")
 log.App.Error("error", "code", 2)
+```
+## conf package useage
+```go
+configuration := conf.Load("app/app.conf")
+conf := conf["app"]
+boolval  := conf.IsSet("key")
+string   := conf.GetString("key1")
+intval   := conf.GetInt("key2")
+floatval := conf.GetFloat("key3")
+boolval  := conf.GetBool("key4")
+```
+
+```conf
+[app]
+key=value
+key1=value1
+key2=value2
+key3=value3
+key4=value4
 ```

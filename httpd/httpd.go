@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jiorry/gos/cache"
+	"github.com/jiorry/gos/conf"
 	"github.com/jiorry/gos/db"
 	"github.com/jiorry/gos/log"
 	"github.com/jiorry/gos/util"
@@ -82,7 +83,7 @@ func init() {
 // Initialize server
 // The config file (code/app.conf) will be loaded.
 func Init() {
-	conf := LoadConfig("app/")
+	conf := conf.Load("app/app.conf")
 	appConf := conf["app"]
 	httpConf := conf["http"]
 	RunMode = conf.GetRunMode()
@@ -137,7 +138,7 @@ func Init() {
 	}
 
 	if conf.IsSet("db") {
-		db.New("app", conf["db"])
+		db.New("app", map[string]string(conf["db"]))
 	}
 	if conf.IsSet("cache") {
 		cache.Init(conf["cache"])

@@ -107,8 +107,12 @@ func (this *QueryBuilder) parse() []byte {
 		s.WriteString(this.order)
 	}
 
-	if this.limit > 0 || this.offset > 0 {
-		s.WriteString(this.GetDatabase().Driver.LimitOffsetStatement(this.limit, this.offset))
+	if this.limit > 0 && this.offset > 0 {
+		s.WriteString(fmt.Sprintf(" limit %d offset %d", this.limit, this.offset))
+	} else if this.limit > 0 {
+		s.WriteString(fmt.Sprintf(" limit %d", this.limit))
+	} else if this.offset > 0 {
+		s.WriteString(fmt.Sprintf(" offset %d", this.offset))
 	}
 
 	return s.Bytes()

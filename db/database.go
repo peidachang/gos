@@ -9,7 +9,7 @@ import (
 
 type IDriver interface {
 	ConnectString() string
-	LimitOffsetStatement(int, int) string
+	SetConnectString(string)
 	QuoteField(string) string
 }
 

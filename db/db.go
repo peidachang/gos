@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"database/sql"
+	"github.com/jiorry/gos/conf"
 	"github.com/jiorry/gos/db/drivers"
 	"github.com/jiorry/gos/log"
 	"io/ioutil"
@@ -26,31 +27,37 @@ func init() {
 }
 
 // create a database instance
-func New(name string, mapData map[string]string) {
-	if mapData == nil {
-		mapData = map[string]string{}
-		mapData["driver"] = "sqlite3"
-		mapData["file"] = "./app.db"
+func New(name string, conf conf.Conf) {
+	if conf == nil {
+		conf = map[string]string{}
+		conf["driver"] = "sqlite3"
+		conf["file"] = "./app.db"
 	}
 	d := &Database{}
 	d.Name = name
-	d.DriverName = mapData["driver"]
+	d.DriverName = conf.Get("driver")
 
 	switch d.DriverName {
 	case "postgres":
-		d.Driver = &drivers.Postgres{Dbname: mapData["dbname"],
-			User:     mapData["user"],
-			Password: mapData["password"],
-			Host:     mapData["host"],
-			Port:     mapData["port"]}
+		d.Driver = &drivers.Postgres{Dbname: conf.Get("dbname"),
+			User:     conf.Get("user"),
+			Password: conf.Get("password"),
+			Host:     conf.Get("host"),
+			Port:     conf.Get("port")}
+	case "mysql":
+		d.Driver = &drivers.Mysql{Dbname: conf.Get("dbname"),
+			User:     conf.Get("user"),
+			Password: conf.Get("password"),
+			Host:     conf.Get("host"),
+			Port:     conf.Get("port"),
+			Charset:  conf.Get("charset")}
 	case "sqlite3":
-		d.Driver = &drivers.Sqlite3{File: mapData["file"]}
-	case "none":
-		return
+		d.Driver = &drivers.Sqlite3{File: conf.Get("file")}
 	default:
-		log.App.Fatalln("no db driver found. you may choose the follows: sqlite3, mysql, postgres, none")
+		log.App.Notice("you may need regist a custom driver: db.RegistDriver(Mysql{})")
+		d.Driver = &drivers.Common{}
 	}
-
+	d.Driver.SetConnectString(conf.Get("connect"))
 	d.Connect()
 
 	if dblog == nil {

@@ -1,4 +1,4 @@
-package httpd
+package conf
 
 import (
 	"bufio"
@@ -18,8 +18,8 @@ var (
 	bBracket = []byte{'['}
 )
 
-func LoadConfig(f string) Configuration {
-	c, err := loadConfig(f + "app.conf")
+func Load(f string) Configuration {
+	c, err := loadConfig(f)
 	if err != nil {
 		println("can not found config file: " + f + "app.conf")
 		os.Exit(1)
@@ -28,12 +28,8 @@ func LoadConfig(f string) Configuration {
 	return c
 }
 
-func AppConfig() Configuration {
-	return config
-}
-
-type Configuration map[string]ConfigData
-type ConfigData map[string]string
+type Configuration map[string]Conf
+type Conf map[string]string
 
 func loadConfig(name string) (Configuration, error) {
 	file, err := os.Open(name)
@@ -91,32 +87,41 @@ func (this Configuration) IsSet(key string) bool {
 	return false
 }
 
-func (this ConfigData) IsSet(key string) bool {
+func (this Conf) IsSet(key string) bool {
 	_, ok := this[key]
 	return ok
 }
 
 // Bool returns the boolean value for a given key.
-func (this ConfigData) GetBool(key string) bool {
+func (this Conf) GetBool(key string) bool {
 	value, _ := strconv.ParseBool(this[key])
 	return value
 }
 
 // Int returns the integer value for a given key.
-func (this ConfigData) GetInt(key string) int {
+func (this Conf) GetInt(key string) int {
 	value, _ := strconv.Atoi(this[key])
 	return value
 }
 
 // Float returns the float value for a given key.
-func (this ConfigData) GetFloat(key string) float64 {
+func (this Conf) GetFloat(key string) float64 {
 	value, _ := strconv.ParseFloat(this[key], 64)
 	return value
 }
 
 // String returns the string value for a given key.
-func (this ConfigData) GetString(key string) string {
-	return this[key]
+func (this Conf) GetString(key string) string {
+	return this.Get(key)
+}
+
+// String returns the string value for a given key.
+func (this Conf) Get(key string) string {
+	if this.IsSet(key) {
+		return this[key]
+	} else {
+		return ""
+	}
 }
 
 func (this Configuration) GetRunMode() string {
