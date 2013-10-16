@@ -64,8 +64,18 @@ db.Query("select * from Users") //return []DataRow
 db.QueryX(&UserVO{}, "select * from Users") //return []*UserVO
 
 ```
+#### 7. db.Tx{} 
+```go
+tx := db.Tx{}
+insert = (&db.InsertBuilder{}).Table("users")
+row := UserVO{"tom", 22}
+tx.Exec(insert.Tx(row))
+delete = (&db.DeleteBuilder{}).Table("users").Where("nick=?", "lucy")
+tx.Exec(delete.Tx())
+tx.Commit()
+```
 
-#### 7. db cache
+#### 8. db cache
 ```go
 q.Cache(300).Query() // cache result
 ```
@@ -96,9 +106,9 @@ conf["connect"] = "dbname=mydb user=postgres password=123 host=127.0.0.1 port=54
 ```
 **init db pool**
 ```go
-db.New("app", conf)
+db.Init("app", conf)
 db.New("app2", conf2)
-db.Use(0)
+db.Use("app2")
 ```
 
 ## log package useage

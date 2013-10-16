@@ -10,8 +10,33 @@ import (
 )
 
 type databasePool struct {
-	dblist       []*Database
-	currentIndex int
+	dblist  map[string]*Database
+	current *Database
+}
+
+func (this *databasePool) Current() *Database {
+	return this.current
+}
+func (this *databasePool) SetCurrent(d *Database) {
+	this.current = d
+}
+func (this *databasePool) Use(name string) {
+	c := this.GetDatabase(name)
+	if c == nil {
+		log.App.Emerg(name, " database is not found!")
+		return
+	} else {
+		this.current = c
+	}
+}
+func (this *databasePool) SetDatabase(name string, d *Database) {
+	this.dblist[name] = d
+}
+func (this *databasePool) GetDatabase(name string) *Database {
+	if v, ok := this.dblist[name]; ok {
+		return v
+	}
+	return nil
 }
 
 var (
@@ -23,11 +48,20 @@ var commaSplit []byte = []byte(",")
 
 func init() {
 	dblog = nil
-	dbpool = &databasePool{dblist: make([]*Database, 0)}
+	dbpool = &databasePool{dblist: make(map[string]*Database)}
+}
+
+func Init(name string, conf conf.Conf) {
+	dbpool.SetCurrent(New(name, conf))
 }
 
 // create a database instance
-func New(name string, conf conf.Conf) {
+func New(name string, conf conf.Conf) *Database {
+	if dbpool.GetDatabase(name) != nil {
+		log.App.Alert(name, "this database is already exists!")
+		return nil
+	}
+
 	if conf == nil {
 		conf = map[string]string{}
 		conf["driver"] = "sqlite3"
@@ -61,18 +95,19 @@ func New(name string, conf conf.Conf) {
 	d.Connect()
 
 	if dblog == nil {
-		dblog = log.Add("db")
+		dblog = log.New("db")
 	}
 
-	Add(d)
-	Use(DatabaseCount() - 1)
+	dbpool.SetDatabase(name, d)
+
+	return d
 }
 
 // Query from database on prepare mode
 // This function use the current database from database bool
 // You can set another database use Use(i) or create an new database use New(name, conf)
 func Query(sqlstr string, args ...interface{}) (DataSet, error) {
-	return Current().Query(sqlstr, args...)
+	return Current().Query([]byte(sqlstr), args...)
 }
 
 // Query from database on prepare mode
@@ -80,14 +115,14 @@ func Query(sqlstr string, args ...interface{}) (DataSet, error) {
 // This function use the current database from database bool
 // You can set another database by Use(i) or New(name, conf) an new database
 func QueryPrepare(sqlstr string, args ...interface{}) (DataSet, error) {
-	return Current().QueryPrepare(sqlstr, args...)
+	return Current().QueryPrepare([]byte(sqlstr), args...)
 }
 
 func QueryX(cls interface{}, sqlstr string, args ...interface{}) (DataSet, error) {
-	return Current().QueryX(cls, sqlstr, args...)
+	return Current().QueryX(cls, []byte(sqlstr), args...)
 }
 func QueryPrepareX(cls interface{}, sqlstr string, args ...interface{}) (DataSet, error) {
-	return Current().QueryPrepareX(cls, sqlstr, args...)
+	return Current().QueryPrepareX(cls, []byte(sqlstr), args...)
 }
 
 // Excute sql from a file
@@ -118,44 +153,28 @@ func ExecFromFile(file string) error {
 // If your has more than on sql command, it will only excute the first.
 // This function use the current database from database bool
 func Exec(sqlstr string, args ...interface{}) (sql.Result, error) {
-	return Current().Exec(sqlstr, args...)
+	return Current().Exec([]byte(sqlstr), args...)
 }
 
 // Excute sql on prepare mode
 // This function use the current database from database bool
 func ExecPrepare(sqlstr string, args ...interface{}) (sql.Result, error) {
-	return Current().ExecPrepare(sqlstr, args...)
-}
-
-// Add a database to database pool
-func Add(d *Database) {
-	dbpool.dblist = append(dbpool.dblist, d)
+	return Current().ExecPrepare([]byte(sqlstr), args...)
 }
 
 // Get a database instance by name from database pool
 func Get(name string) *Database {
-	for _, item := range dbpool.dblist {
-		if name == item.Name {
-			return item
-		}
-	}
-	return nil
-}
-
-// Get a database instance by index from database pool
-func GetByIndex(i int) *Database {
-	return dbpool.dblist[i]
+	return dbpool.GetDatabase(name)
 }
 
 // Return the current database from database pool
 func Current() *Database {
-	return dbpool.dblist[dbpool.currentIndex]
+	return dbpool.Current()
 }
 
 // Set current database by index
-func Use(i int) *Database {
-	dbpool.currentIndex = i
-	return Current()
+func Use(name string) {
+	dbpool.Use(name)
 }
 
 // Get database count

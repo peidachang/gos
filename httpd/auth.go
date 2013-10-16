@@ -18,11 +18,10 @@ import (
 var poolRSAKey []*RSAKey
 var privateSecret string = util.Unique()
 var separator []byte = []byte("|")
-var UserAuthVO *AuthVO
 
 type AuthVO struct {
-	Table, GroupField, LastsEeatFieLd string
-	CookieKey, CookiePublicKey        string
+	Table, FieldId, FieldNick, FieldToken, FieldEmail, FieldSalt, FieldLastSee string
+	CookieKey, CookiePublicKey                                                 string
 }
 
 type RSAKey struct {
@@ -32,12 +31,7 @@ type RSAKey struct {
 
 func init() {
 	poolRSAKey = make([]*RSAKey, 3)
-	UserAuthVO = &AuthVO{}
-	UserAuthVO.CookieKey = "gosauth"
-	UserAuthVO.CookiePublicKey = "gospub"
-	UserAuthVO.Table = "Users"
-	UserAuthVO.GroupField = "GroupId"
-	UserAuthVO.LastsEeatFieLd = "LastSeeAt"
+
 }
 
 func newRSAKey() *rsa.PrivateKey {
@@ -66,7 +60,7 @@ func GetRSAKey(unix int64) *RSAKey {
 	}
 
 	for _, k := range poolRSAKey {
-		if k.CreatedAt.Unix() == unix {
+		if k != nil && k.CreatedAt.Unix() == unix {
 			return k
 		}
 	}
@@ -75,12 +69,29 @@ func GetRSAKey(unix int64) *RSAKey {
 }
 
 type UserAuth struct {
-	user db.DataRow
-	ctx  *Context
+	user       db.DataRow
+	ctx        *Context
+	RegistFunc func(string, string) error
+	GroupId    int
+	VO         *AuthVO
 }
 
 func (this *UserAuth) SetContext(c *Context) *UserAuth {
 	this.ctx = c
+
+	if this.VO == nil {
+		this.VO = &AuthVO{}
+		this.VO.CookieKey = "gosauth"
+		this.VO.CookiePublicKey = "gospub"
+		this.VO.Table = "users"
+		this.VO.FieldId = "id"
+		this.VO.FieldNick = "nick"
+		this.VO.FieldToken = "token"
+		this.VO.FieldEmail = "email"
+		this.VO.FieldSalt = "salt"
+		this.VO.FieldLastSee = "last_see_at"
+	}
+
 	return this
 }
 
@@ -103,39 +114,33 @@ func (this *UserAuth) Auth(cipher []byte) (string, error) {
 	pwd := string(arr[1])
 
 	if time.Now().Unix()-int64(ts) > 30 {
-		return "", MyErr(0, "user auth is overdue").Log("notice")
+		return "", NewError(0, "user auth is overdue").Log("notice")
 	}
 
 	user := this.Find(login)
 	if user == nil {
-		return login, MyErr(0, "login not found").Log("notice")
+		return login, NewError(0, "login not found").Log("notice")
 	}
 
-	if user.GetString("Token") != this.GenerateUserToken(login, pwd, user.GetString("Salt")) {
+	if user.GetString(this.VO.FieldToken) != this.GenerateUserToken(login, pwd, user.GetString(this.VO.FieldSalt)) {
 		this.ClearCookie()
 		this.user = nil
-		return login, MyErr(0, "login and password is not matched").Log("notice")
-	}
-
-	if user.GetInt64(UserAuthVO.GroupField) < 0 {
-		this.ClearCookie()
-		this.user = nil
-		return login, MyErr(0, "user is closed").Log("notice")
+		return login, NewError(0, "login and password is not matched").Log("notice")
 	}
 
 	this.user = user
 
 	data := db.DataRow{}
-	data[UserAuthVO.LastsEeatFieLd] = time.Now()
-	(&db.UpdateBuilder{}).Table(UserAuthVO.Table).
-		Where("Id=?", this.user.GetInt64("Id")).
+	data[this.VO.FieldLastSee] = time.Now()
+	(&db.UpdateBuilder{}).Table(this.VO.Table).
+		Where(this.VO.FieldId+"=?", this.user.GetInt64(this.VO.FieldId)).
 		Update(data)
 
 	return login, nil
 }
 
 func (this *UserAuth) Find(login string) db.DataRow {
-	find := (&db.QueryBuilder{}).Table(UserAuthVO.Table).Where("Login=?", login).Cache(300)
+	find := (&db.QueryBuilder{}).Table(this.VO.Table).Where(this.VO.FieldNick+"=?", login).Cache(300)
 
 	row, err := find.QueryOne()
 	if err != nil {
@@ -156,13 +161,13 @@ func (this *UserAuth) SetCookie(age int64) {
 		unix = ts + age
 	}
 
-	this.ctx.SetCookie(UserAuthVO.CookieKey, fmt.Sprintf("%s|%d|%s", this.UserName(), ts, this.createAuthToken(this.UserName(), ts, this.user["Token"].(string), privateSecret)), unix, "/", "", true)
-	this.ctx.SetCookie(UserAuthVO.CookiePublicKey, fmt.Sprint(this.UserName(), "|", this.GroupId()), unix, "/", "", false)
+	this.ctx.SetCookie(this.VO.CookieKey, fmt.Sprintf("%s|%d|%s", this.Nick(), ts, this.createAuthToken(this.Nick(), ts, this.user[this.VO.FieldToken].(string), privateSecret)), unix, "/", "", true)
+	this.ctx.SetCookie(this.VO.CookiePublicKey, fmt.Sprint(this.Nick(), "|", this.GroupId), unix, "/", "", false)
 }
 
 func (this *UserAuth) ClearCookie() {
-	this.ctx.SetCookie(UserAuthVO.CookieKey, "", -1, "/", "", true)
-	this.ctx.SetCookie(UserAuthVO.CookiePublicKey, "", -1, "/", "", false)
+	this.ctx.SetCookie(this.VO.CookieKey, "", -1, "/", "", true)
+	this.ctx.SetCookie(this.VO.CookiePublicKey, "", -1, "/", "", false)
 }
 
 func (this *UserAuth) IsOk() bool {
@@ -175,23 +180,16 @@ func (this *UserAuth) NotOk() bool {
 
 func (this *UserAuth) UserId() int64 {
 	if this.IsOk() {
-		return this.user.GetInt64("Id")
+		return this.user.GetInt64(this.VO.FieldId)
 	}
 	return -1
 }
 
-func (this *UserAuth) UserName() string {
+func (this *UserAuth) Nick() string {
 	if this.IsOk() {
-		return this.user.GetString("Login")
+		return this.user.GetString(this.VO.FieldNick)
 	}
 	return ""
-}
-
-func (this *UserAuth) GroupId() int64 {
-	if this.IsOk() {
-		return this.user.GetInt64(UserAuthVO.GroupField)
-	}
-	return -1
 }
 
 func (this *UserAuth) User() db.DataRow {
@@ -202,7 +200,7 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 	if len(this.user) > 0 {
 		return this.user
 	}
-	v, err := this.ctx.Request.Cookie(UserAuthVO.CookieKey)
+	v, err := this.ctx.Request.Cookie(this.VO.CookieKey)
 	if err != nil {
 		return this.user
 	}
@@ -217,7 +215,7 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 	n, _ := strconv.Atoi(arr[1])
 	ts := int64(n)
 
-	if this.user == nil || arr[2] != this.createAuthToken(login, ts, this.user["Token"].(string), privateSecret) {
+	if this.user == nil || arr[2] != this.createAuthToken(login, ts, this.user[this.VO.FieldToken].(string), privateSecret) {
 		this.user = nil
 	}
 
@@ -233,31 +231,31 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 
 	ppk := GetRSAKey(int64(rsakeyUnix))
 	if ppk == nil {
-		return 0, nil, MyErr(0, "no rsa key found!").Log("error")
+		return 0, nil, NewError(0, "no rsa key found!").Log("error")
 	}
 
 	aeskeyBase64, err := rsa.DecryptPKCS1v15(rand.Reader, ppk.Key, rsaCipher)
 	if err != nil {
-		return 0, nil, MyErr(0, "decrypt::", err).Log("error")
+		return 0, nil, NewError(0, "decrypt::", err).Log("error")
 	}
 
 	aeskey := make([]byte, 18)
 	base64.StdEncoding.Decode(aeskey, aeskeyBase64)
 	if len(aeskey) == 0 {
-		return 0, nil, MyErr(0, "aeskey is empty").Log("error")
+		return 0, nil, NewError(0, "aeskey is empty").Log("error")
 	}
 	aeskey = aeskey[:16]
 
 	code, err := base64.StdEncoding.DecodeString(string(arr[2]))
 	if err != nil {
-		return 0, nil, MyErr(0, "base64 decode:", err).Log("error")
+		return 0, nil, NewError(0, "base64 decode:", err).Log("error")
 	}
 
 	now := time.Now()
 	ts, _ := strconv.Atoi(fmt.Sprintf("%x", code[0:8]))
 
 	if now.Unix()-int64(ts/1000) > 30 {
-		return 0, nil, MyErr(0, "login ts is exprie").Log("error")
+		return 0, nil, NewError(0, "login ts is exprie").Log("error")
 	}
 
 	b := lib.AESDecrypt(code[8:24], aeskey[0:16], code[24:])
@@ -265,7 +263,7 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 	n := bytes.Index(b, []byte("-"))
 	l, err := strconv.Atoi(string(b[0:n]))
 	if err != nil {
-		return 0, nil, MyErr(0, err).Log("error")
+		return 0, nil, NewError(0, err).Log("error")
 	}
 
 	return int64(ts), b[n+1 : n+1+l], nil
@@ -273,42 +271,28 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 
 func (this *UserAuth) Regist(login string, email string, cipher string) error {
 	if login == "" || email == "" {
-		return MyErr(0, "login or email is empty")
+		return NewError(0, "login or email is empty")
 	}
 
-	find := (&db.QueryBuilder{}).Table(UserAuthVO.Table)
-	if isExist, _ := find.Exists("Login=? or Email=?", login, email); isExist {
-		return MyErr(0, "login or email exists")
+	find := (&db.QueryBuilder{}).Table(this.VO.Table)
+	if isExist, _ := find.Exists(this.VO.FieldNick+"=? or "+this.VO.FieldEmail+"=?", login, email); isExist {
+		return NewError(0, "login or email exists")
 	}
 
 	_, text, err := this.PraseCipher([]byte(cipher))
 	if err != nil {
-		return MyErr(0, err)
+		return NewError(0, err)
 	}
-
-	now := time.Now()
 	salt := util.Unique()
+	err = this.RegistFunc(salt, this.GenerateUserToken(login, string(text), salt))
 
-	insert := &db.InsertBuilder{}
-	row := db.DataRow{}
-	row["Login"] = login
-	row["Email"] = email
-	row["Salt"] = salt
-	row["Token"] = this.GenerateUserToken(login, string(text), salt)
-	row["CreatedAt"] = now
-	row[UserAuthVO.LastsEeatFieLd] = now
-	row[UserAuthVO.GroupField] = int64(2)
-
-	if arr, _ := (&db.QueryBuilder{}).Table(UserAuthVO.Table).Limit(1).Query(); len(arr) == 0 {
-		row[UserAuthVO.GroupField] = int64(1)
+	u := this.Find(login)
+	if u == nil {
+		return NewError(0, "user is empty")
+	} else {
+		this.SetUser(u)
+		this.SetCookie(0)
 	}
-
-	_, err = insert.Table(UserAuthVO.Table).Insert(row)
-	if err != nil {
-		return MyErr(0, err.Error())
-	}
-	this.SetUser(row)
-	this.SetCookie(0)
 
 	return nil
 }

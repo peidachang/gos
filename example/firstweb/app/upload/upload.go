@@ -11,8 +11,8 @@ type UserFileUpload struct {
 	httpd.Upload
 }
 
-func (this *UserFileUpload) InitData() {
-	this.Upload.InitData()
+func (this *UserFileUpload) Init() {
+	this.Upload.Init()
 	// this.Upload.StorePath = "static/uploads"
 	this.Upload.ExtAllowedList = []string{"", ".txt", ".zip", ".txt", ".7z", ".gz", ".tar", ".rar", ".jpg", ".jpeg", ".png", ".gif"}
 }

@@ -7,34 +7,43 @@ import (
 
 // Delete builder
 type DeleteBuilder struct {
-	table string
 	builder
+	table string
 	where *parpareParams
 }
 
-func (this *DeleteBuilder) Table(t string) *DeleteBuilder {
-	this.table = t
-	return this
+func (d *DeleteBuilder) Table(t string) *DeleteBuilder {
+	d.table = t
+	return d
 }
 
-func (this *DeleteBuilder) Where(cond string, args ...interface{}) *DeleteBuilder {
-	this.where = &parpareParams{cond, args}
-	return this
-}
-
-func (this *DeleteBuilder) Delete() (sql.Result, error) {
+func (d *DeleteBuilder) parse() ([]byte, []interface{}) {
 	var args []interface{}
-	var cond string = ""
-	if this.where != nil {
-		cond = " where " + this.where.code
-		args = this.where.args
-	}
 
 	s := bytes.Buffer{}
-	driver := this.builder.GetDatabase().Driver
+	driver := d.builder.GetDatabase().Driver
 	s.WriteString("delete")
 	s.WriteString(" from ")
-	s.WriteString(driver.QuoteField(this.table))
-	s.WriteString(cond)
-	return this.GetDatabase().ExecPrepare(s.String(), args...)
+	s.WriteString(driver.QuoteField(d.table))
+	if d.where != nil {
+		s.WriteString(" where ")
+		s.WriteString(d.where.code)
+		args = d.where.args
+	}
+	return s.Bytes(), args
+}
+
+func (d *DeleteBuilder) Where(cond string, args ...interface{}) *DeleteBuilder {
+	d.where = &parpareParams{cond, args}
+	return d
+}
+
+func (d *DeleteBuilder) Delete() (sql.Result, error) {
+	s, args := d.parse()
+	return d.GetDatabase().ExecPrepare(s, args...)
+}
+
+func (d *DeleteBuilder) Tx() *TxItem {
+	sql, args := d.parse()
+	return &TxItem{sql, args, nil}
 }

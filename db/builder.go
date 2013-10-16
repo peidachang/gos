@@ -15,6 +15,10 @@ type builder struct {
 func (this *builder) GetDatabase() *Database {
 	if this.database == nil {
 		this.database = Current()
+
+		if this.database == nil {
+			panic("you need to initializ a database: db.New(name, conf)")
+		}
 	}
 	return this.database
 }
@@ -28,25 +32,31 @@ type parpareParams struct {
 	args []interface{}
 }
 
-func keyValueList(data interface{}) (keys [][]byte, values []interface{}, stmts [][]byte) {
+func keyValueList(stype string, data interface{}) (keys [][]byte, values []interface{}, stmts [][]byte) {
 	switch data.(type) {
 	case DataRow, map[string]interface{}:
 		inst := data.(DataRow)
 		l := len(inst)
+		isUpdate := stype == "update"
+
 		keys = make([][]byte, l)
 		values = make([]interface{}, l)
 		stmts = make([][]byte, l)
+
 		i := 0
 		for k, v := range inst {
 			keys[i] = []byte(k)
-			stmts[i] = []byte("?")
+			if isUpdate {
+				keys[i] = append(keys[i], bEqual[0], bQuestionMark[0])
+			}
+			stmts[i] = bQuestionMark
 			values[i] = v
 			i++
 		}
 	default:
 		sm := &structMaps{}
 		sm.SetTarget(data)
-		keys, values, stmts = sm.KeyValueList()
+		keys, values, stmts = sm.KeyValueList(stype)
 	}
 	return
 }
@@ -184,17 +194,21 @@ func (this *structMaps) ScanRowsToStruct(rows *sql.Rows) (DataSet, error) {
 	return result, nil
 }
 
-func (this *structMaps) KeyValueList() (keys [][]byte, values []interface{}, stmts [][]byte) {
+func (this *structMaps) KeyValueList(stype string) (keys [][]byte, values []interface{}, stmts [][]byte) {
 	typ := this.GetTypeElem()
 	l := typ.NumField()
+	isUpdate := stype == "update"
 	keys = make([][]byte, l)
 	values = make([]interface{}, l)
 	stmts = make([][]byte, l)
 
 	for i := 0; i < l; i++ {
 		keys[i] = []byte(typ.Field(i).Name)
+		if isUpdate {
+			keys[i] = append(keys[i], bEqual[0], bQuestionMark[0])
+		}
 		values[i] = this.val.Field(i).Interface()
-		stmts[i] = []byte("?")
+		stmts[i] = bQuestionMark
 	}
 	return
 }

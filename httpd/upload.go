@@ -10,16 +10,18 @@ import (
 )
 
 type Upload struct {
+	parent         interface{}
 	Ctx            *Context
 	StorePath      string
 	ExtAllowedList []string
 }
 
-func (this *Upload) SetContext(ct *Context) {
+func (this *Upload) Prepare(ct *Context, p interface{}) {
 	this.Ctx = ct
+	this.parent = p
 }
 
-func (this *Upload) InitData() {
+func (this *Upload) Init() {
 	this.StorePath = "static/uploads"
 }
 

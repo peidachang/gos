@@ -36,88 +36,91 @@ type Page struct {
 	Ctx    *Context
 	Data   interface{}
 	Layout *AppLayout
+	parent interface{}
 }
 
 type IPage interface {
 	ToStaticFile()
 }
 
-func (this *Page) SetView(viewName string) *Page {
-	this.View = &ThemeItem{"", "template", viewName}
-	return this
+func (p *Page) SetData(d interface{}) {
+	p.Data = d
 }
 
-func (this *Page) SetThemeView(theme string, viewName string) *Page {
-	this.View = &ThemeItem{theme, "template", viewName}
-	return this
+func (p *Page) SetView(viewName string) *Page {
+	p.View = &ThemeItem{"", "template", viewName}
+	return p
 }
 
-func (this *Page) AddHead(items ...string) *Page {
-	this.Head = append(this.Head, items...)
-	return this
+func (p *Page) SetThemeView(theme string, viewName string) *Page {
+	p.View = &ThemeItem{theme, "template", viewName}
+	return p
 }
 
-func (this *Page) AddThemeJs(theme string, items ...string) *Page {
+func (p *Page) AddHead(items ...string) *Page {
+	p.Head = append(p.Head, items...)
+	return p
+}
+
+func (p *Page) AddThemeJs(theme string, items ...string) *Page {
 	arr := make([]*ThemeItem, len(items))
 	for i, _ := range items {
 		arr[i] = &ThemeItem{theme, "js", items[i]}
 	}
-	this.Js = append(this.Js, arr...)
-	return this
+	p.Js = append(p.Js, arr...)
+	return p
 }
-func (this *Page) AddJs(items ...string) *Page {
-	return this.AddThemeJs("", items...)
+func (p *Page) AddJs(items ...string) *Page {
+	return p.AddThemeJs("", items...)
 }
 
-func (this *Page) AddThemeCss(theme string, items ...string) *Page {
+func (p *Page) AddThemeCss(theme string, items ...string) *Page {
 	arr := make([]*ThemeItem, len(items))
 	for i, _ := range items {
 		arr[i] = &ThemeItem{theme, "css", items[i]}
 	}
-	this.Css = append(this.Css, arr...)
-	return this
+	p.Css = append(p.Css, arr...)
+	return p
 }
 
-func (this *Page) AddCss(items ...string) *Page {
-	return this.AddThemeCss("", items...)
+func (p *Page) AddCss(items ...string) *Page {
+	return p.AddThemeCss("", items...)
 }
 
-func (this *Page) Init() {
-	this.Cache = &PageCache{"none", 0}
-	this.Js = ThemeItems{}
-	this.Css = ThemeItems{}
-	this.JsPosition = "head"
-	this.Head = []string{
-		`<meta charset="utf-8">`,
-		`<script type="text/javascript">function addLoadFunction(func){var oldonload=window.onload;if(func && typeof oldonload!="function")window.onload=func;else{window.onload=function(){if(oldonload) oldonload();if(func) func()}}}</script>`}
+func (p *Page) Prepare(ct *Context, parent interface{}) {
+	p.Ctx = ct
+	p.parent = parent
 
-	this.Data = make(map[string]interface{})
+	p.Cache = &PageCache{"none", 0}
+	p.Js = ThemeItems{}
+	p.Css = ThemeItems{}
+	p.JsPosition = "head"
+	p.Head = []string{`<meta charset="utf-8">`}
 
-	this.Layout = &AppLayout{
+	// p.Data = make(map[string]interface{})
+
+	p.Layout = &AppLayout{
 		topRender:     RenderNothing,
 		headerRender:  RenderNothing,
 		contextRender: RenderNothing,
 		footerRender:  RenderNothing,
 		bottomRender:  RenderNothing}
+
 }
 
-func (this *Page) SetContext(ct *Context) {
-	this.Ctx = ct
-}
-
-func (this *Page) RenderPage() {
+func (p *Page) RenderPage() {
 	// If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
-	// this.Ctx.ResponseWriter.WriteHeader(200)
-	this.BuildLayout().RenderLayout(this.Ctx.ResponseWriter)
+	// p.Ctx.ResponseWriter.WriteHeader(200)
+	p.BuildLayout().RenderLayout(p.Ctx.ResponseWriter)
 }
 
-func (this *Page) CheckPageCache() int {
+func (p *Page) CheckCache() int {
 	if RunMode != "pro" {
 		return CACHE_DISABLED
 	}
 
-	filename := "var/cache" + this.Ctx.Request.RequestURI + ".html"
-	switch this.Cache.Type {
+	filename := "var/cache" + p.Ctx.Request.RequestURI + ".html"
+	switch p.Cache.Type {
 	case "file":
 		if _, err := os.Stat(filename); err != nil {
 			if os.IsNotExist(err) {
@@ -125,7 +128,7 @@ func (this *Page) CheckPageCache() int {
 			}
 			return CACHE_NOT_FOUND
 		}
-		http.ServeFile(this.Ctx.ResponseWriter, this.Ctx.Request, filename)
+		http.ServeFile(p.Ctx.ResponseWriter, p.Ctx.Request, filename)
 		return CACHE_FOUND
 	}
 	return CACHE_DISABLED
@@ -137,10 +140,10 @@ var cachePathList []string = make([]string, 0)
 // if cache file is not exists, it will create cache file
 // filename=/content/cid?abc=123
 // the dir /var/content and file /var/content/cid?abc=123 will be created.
-func (this *Page) CachePage() {
-	if this.Cache.Type == "file" {
-		filename := "var/cache" + this.Ctx.Request.RequestURI + ".html"
-		uri := []byte(this.Ctx.Request.RequestURI)
+func (p *Page) CachePage() {
+	if p.Cache.Type == "file" {
+		filename := "var/cache" + p.Ctx.Request.RequestURI + ".html"
+		uri := []byte(p.Ctx.Request.RequestURI)
 		n := bytes.Index(uri, []byte("?"))
 		var t []byte
 
@@ -170,75 +173,76 @@ func (this *Page) CachePage() {
 
 		}
 
-		this.savePageToFile(filename)
-		http.ServeFile(this.Ctx.ResponseWriter, this.Ctx.Request, filename)
+		p.savePageToFile(filename)
+		http.ServeFile(p.Ctx.ResponseWriter, p.Ctx.Request, filename)
 	}
 }
 
-func (this *Page) savePageToFile(filename string) {
+func (p *Page) savePageToFile(filename string) {
 	out, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE, 0)
 	if err != nil {
 		log.App.Fatalln(err)
 	}
-	this.BuildLayout().RenderLayout(out)
+	p.BuildLayout().RenderLayout(out)
 }
-func (this *Page) ToStaticFile() {
-	this.savePageToFile(httpServer.StaticDir + "/" + this.View.GetPath() + ".html")
+func (p *Page) ToStaticFile() {
+	p.savePageToFile(httpServer.WebRoot + "/" + p.View.GetPath() + ".html")
 }
 
-func (this *Page) BuildLayout() *AppLayout {
+func (p *Page) BuildLayout() *AppLayout {
 	headLayout := &HeadLayout{
-		JsPosition:     this.JsPosition,
-		Title:          this.Title,
+		JsPosition:     p.JsPosition,
+		Title:          p.Title,
 		HeadItemRender: RenderNothing,
 		JsRender:       RenderNothing,
 		CssRender:      RenderNothing}
 
-	if len(this.Head) > 0 {
+	if len(p.Head) > 0 {
 		headLayout.HeadItemRender = &HeadItemRender{
-			Data: this.Head}
+			Data: p.Head}
 	}
 
-	if len(this.Css) > 0 {
+	if len(p.Css) > 0 {
 		headLayout.CssRender = &CssRender{
-			Data: this.Css}
+			Data: p.Css}
 	}
 
-	if len(this.Js) > 0 {
+	if len(p.Js) > 0 {
 		headLayout.JsRender = &JsRender{
-			Data: this.Js}
+			Data: p.Js}
 	}
-	this.Layout.SetHeadLayout(headLayout)
+	p.Layout.SetHeadLayout(headLayout)
 
-	if this.View != nil {
-		this.Layout.SetContextRender(&TemplateRender{
-			View: this.View,
-			Data: this.Data})
+	if p.View != nil {
+		p.Layout.SetContextRender(&TemplateRender{
+			View: p.View,
+			Data: p.Data})
 	}
 
-	return this.Layout
+	return p.Layout
 }
 
-func (this *Page) Auth()  {}
-func (this *Page) Get()   {}
-func (this *Page) Post()  {}
-func (this *Page) After() {}
+func (p *Page) Auth()   {}
+func (p *Page) Init()   {}
+func (p *Page) Get()    {}
+func (p *Page) Post()   {}
+func (p *Page) Action() {}
 
 type ThemeItem struct {
 	Theme, Folder, Value string
 }
 
-func (this *ThemeItem) GetPath() string {
-	if this.Theme == "" {
-		return "/" + this.Folder + "/" + this.Value
+func (th *ThemeItem) GetPath() string {
+	if th.Theme == "" {
+		return "/" + th.Folder + "/" + th.Value
 	}
-	return "/themes/" + this.Theme + "/" + this.Folder + "/" + this.Value
+	return "/themes/" + th.Theme + "/" + th.Folder + "/" + th.Value
 }
-func (this *ThemeItem) GetAssetsPath() string {
-	if this.Theme == "" {
-		return "/" + AssetsName + "/" + this.Folder + "/" + this.Value
+func (th *ThemeItem) GetAssetsPath() string {
+	if th.Theme == "" {
+		return "/" + AssetsName + "/" + th.Folder + "/" + th.Value
 	}
-	return "/themes/" + this.Theme + "/" + AssetsName + "/" + this.Folder + "/" + this.Value
+	return "/themes/" + th.Theme + "/" + AssetsName + "/" + th.Folder + "/" + th.Value
 }
 
 type ThemeItems []*ThemeItem
@@ -252,7 +256,7 @@ func StaticFiles(pages []IPage) {
 
 	for _, p := range pages {
 		v := reflect.ValueOf(p)
-		v.MethodByName("Init").Call(nil)
+		v.MethodByName("Prepare").Call([]reflect.Value{reflect.ValueOf(nil), v})
 		p.ToStaticFile()
 	}
 }

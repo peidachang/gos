@@ -41,3 +41,7 @@ func (this *Mysql) ConnectString() string {
 func (this *Mysql) QuoteField(s string) string {
 	return `"` + s + `"`
 }
+
+func (this *Mysql) LastInsertId(table, id string) string {
+	return "SELECT LAST_INSERT_ID()"
+}

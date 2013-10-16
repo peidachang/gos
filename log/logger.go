@@ -26,12 +26,12 @@ type Logger struct {
 
 func (this *Logger) Init(file string) {
 	var out io.Writer
-	if RunMode == "dev" {
-		fmt.Println("[development]", "Logger is write in Stdout "+file)
+	if file == "" || RunMode == "dev" {
+		fmt.Println("[development] Logger is write in Stdout ")
 		out = os.Stdout
 	} else {
-		fmt.Println("[production]", "Logger is write in .log file: "+file)
-		fmt.Println("[production]", "log level is:", Level)
+		fmt.Println("Logger is write in .log file: " + file)
+		fmt.Println("log level is:", Level)
 		var err error
 		out, err = os.OpenFile(file, os.O_APPEND|os.O_CREATE, 0)
 		if err != nil {

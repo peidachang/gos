@@ -18,6 +18,8 @@ type loggers map[string]*Logger
 func init() {
 	pool = make(map[string]*Logger)
 	PrintStackLevel = 4
+	App = &Logger{}
+	App.Init("")
 }
 
 func Init(folder string, names []string, runmode string) {
@@ -29,20 +31,20 @@ func Init(folder string, names []string, runmode string) {
 		}
 	}
 
-	App = Add("app")
+	App = New("app")
 
 	for _, name := range names {
 		if name == "app" {
 			continue
 		}
-		Add(name)
+		New(name)
 	}
 }
 
 func Get(name string) *Logger {
 	return pool[name]
 }
-func Add(name string) *Logger {
+func New(name string) *Logger {
 	l := &Logger{}
 	pool[name] = l
 

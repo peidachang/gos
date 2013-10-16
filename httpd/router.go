@@ -1,6 +1,8 @@
 package httpd
 
 import (
+	"bytes"
+	"github.com/jiorry/gos/httpd/websock"
 	"github.com/jiorry/gos/log"
 	"html"
 	"reflect"
@@ -8,21 +10,14 @@ import (
 	"strings"
 )
 
-var (
-	routes   []*Route
-	wsRoutes []*Route
-	upRoutes []*Route
-)
-
-func init() {
-	routes = make([]*Route, 0)
-	wsRoutes = make([]*Route, 0)
-	upRoutes = make([]*Route, 0)
-}
+var routes []*Route = make([]*Route, 0)
+var apiRoutes []*Route = make([]*Route, 0)
+var upRoutes []*Route = make([]*Route, 0)
+var wsRoutes []*Route = make([]*Route, 0)
 
 type Route struct {
 	ClassType reflect.Type
-	Rule      string
+	Rule      []byte
 	Pattern   *regexp.Regexp // for matching the url path
 	Keys      []string
 }
@@ -40,47 +35,56 @@ func AddRoute(rule string, clas interface{}) {
 		log.App.Alert("/ping is used for default ping router")
 	case "/api":
 		log.App.Alert("/api is used for default api router")
+	case "/ws":
+		log.App.Alert("/ws is used for default websocket router")
 	}
 	addRouteTo(rule, clas, 0)
 }
 
-func MatchRoute(path string) *RouteMatched {
-	return matchRoute(path)
+func MatchRoute(path []byte) *RouteMatched {
+	return matchRoute(path, 0)
 }
 
-func AddWebServiceRoute(rule string, clas interface{}) {
-	if rule == "" {
-		rule = "/"
-	}
-	addRouteTo("/api"+rule, clas, 1)
+func AddWebSocketRoute(rule string, clas interface{}) {
+	httpServer.EnableWebSocket = true
+	r := addRouteTo("/ws"+rule, clas, 3)
+	s := websock.NewServer(r.ClassType.String())
+	go s.Start()
 }
 
-func MatchWebServiceRoute(path string) *RouteMatched {
+func MatchWebSocketRoute(path []byte) *RouteMatched {
 	return searchPathFrom(path, wsRoutes)
 }
 
+func AddWebApiRoute(rule string, clas interface{}) {
+	httpServer.EnableApi = true
+	addRouteTo("/api"+rule, clas, 1)
+}
+
+func MatchWebApiRoute(path []byte) *RouteMatched {
+	return searchPathFrom(path, apiRoutes)
+}
+
 func AddFileUploadRoute(rule string, clas interface{}) {
-	if rule == "" {
-		rule = "/"
-	}
+	httpServer.EnableUpload = true
 	addRouteTo("/upload"+rule, clas, 2)
 }
 
-func MatchFileuploadRoute(path string) *RouteMatched {
+func MatchFileuploadRoute(path []byte) *RouteMatched {
 	return searchPathFrom(path, upRoutes)
 }
 
-func addRouteTo(rule string, clas interface{}, itype int) {
+func addRouteTo(rule string, clas interface{}, itype int) *Route {
 	var regPath *regexp.Regexp
 	var keys []string
 
-	if strings.ContainsAny(rule, "[") {
-		regReplace, _ := regexp.Compile("\\[\\w+\\]")
+	if strings.ContainsAny(rule, ":") {
+		regReplace, _ := regexp.Compile(":\\w+")
 		matched := regReplace.FindAllString(rule, -1)
 		// prepare keys
 		keys = []string{}
 		for _, value := range matched {
-			keys = append(keys, value[1:len(value)-1])
+			keys = append(keys, value[1:len(value)])
 		}
 
 		//prepare regexp pattern
@@ -100,51 +104,61 @@ func addRouteTo(rule string, clas interface{}, itype int) {
 
 	r := &Route{
 		Keys:      keys,
-		Rule:      rule,
+		Rule:      []byte(rule),
 		Pattern:   regPath,
 		ClassType: typ}
 	switch itype {
 	case 0:
 		routes = append(routes, r)
 	case 1:
-		wsRoutes = append(wsRoutes, r)
+		apiRoutes = append(apiRoutes, r)
 	case 2:
 		upRoutes = append(upRoutes, r)
+	case 3:
+		wsRoutes = append(wsRoutes, r)
 	}
+	return r
 }
 
-func searchPathFrom(path string, fromRoutes []*Route) *RouteMatched {
-	if strings.HasSuffix(path, "/") {
-		path = strings.TrimSuffix(path, "/")
+func searchPathFrom(path []byte, fromRoutes []*Route) *RouteMatched {
+	if bytes.HasSuffix(path, BDATA_SLASH) {
+		path = bytes.TrimSuffix(path, BDATA_SLASH)
 	}
 	for _, route := range fromRoutes {
-		if path == route.Rule {
+		if bytes.Equal(path, route.Rule) {
 			return &RouteMatched{ClassType: route.ClassType, Params: nil}
 		}
 	}
 	return nil
 }
 
-func matchRoute(path string) *RouteMatched {
+func matchRoute(path []byte, itype int) *RouteMatched {
 	var route *Route
+	var items []*Route
+	switch itype {
+	case 3:
+		items = wsRoutes
+	default:
+		items = routes
+	}
 
-	for _, route = range routes {
+	for _, route = range items {
 		if route.Pattern == nil {
-			// string route
-			if strings.HasSuffix(path, "/") {
-				path = strings.TrimSuffix(path, "/")
+			// fix route
+			if bytes.HasSuffix(path, BDATA_SLASH) {
+				path = bytes.TrimSuffix(path, BDATA_SLASH)
 			}
-			if path == route.Rule {
+			if bytes.Equal(path, route.Rule) {
 				return &RouteMatched{ClassType: route.ClassType, Params: nil}
 			}
 		} else {
 			// regexp route
-			if matched := route.Pattern.FindAllStringSubmatch(path, -1); matched != nil {
-				params := map[string]string{}
+			if matched := route.Pattern.FindAllSubmatch(path, -1); matched != nil {
+				params := make(map[string]string)
 				i := 0
 				for _, value := range route.Keys {
 					i++
-					params[value] = html.EscapeString(matched[0][i])
+					params[value] = html.EscapeString(string(matched[0][i]))
 				}
 				return &RouteMatched{ClassType: route.ClassType, Params: params}
 			}

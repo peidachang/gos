@@ -33,3 +33,7 @@ func (this *Postgres) ConnectString() string {
 func (this *Postgres) QuoteField(s string) string {
 	return `"` + s + `"`
 }
+
+func (this *Postgres) LastInsertId(table, pkey string) string {
+	return "select currval(pg_get_serial_sequence('" + table + "','" + pkey + "'))"
+}

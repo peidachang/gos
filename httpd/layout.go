@@ -11,6 +11,8 @@ type AppLayout struct {
 	contextRender IRender
 	footerRender  IRender
 	bottomRender  IRender
+
+	RenderFunc func(*AppLayout, io.Writer)
 }
 
 func (this *AppLayout) TopView(theme string, name string, data interface{}) {
@@ -33,27 +35,74 @@ func (this *AppLayout) BottomView(theme string, name string, data interface{}) {
 		View: &ThemeItem{theme, "template", name},
 		Data: data}
 }
+
+func (this *AppLayout) GetTopRender() IRender {
+	return this.topRender
+}
 func (this *AppLayout) SetTopRender(r IRender) {
-	this.contextRender = r
-}
-func (this *AppLayout) SetHeaderRender(r IRender) {
-	this.contextRender = r
-}
-func (this *AppLayout) SetContextRender(r IRender) {
-	this.contextRender = r
-}
-func (this *AppLayout) SetFooterRender(r IRender) {
-	this.contextRender = r
-}
-func (this *AppLayout) SetBottomRender(r IRender) {
-	this.contextRender = r
+	if r == nil {
+		this.topRender = RenderNothing
+	} else {
+		this.topRender = r
+	}
 }
 
+func (this *AppLayout) GetHeaderRender() IRender {
+	return this.headerRender
+}
+func (this *AppLayout) SetHeaderRender(r IRender) {
+	if r == nil {
+		this.headerRender = RenderNothing
+	} else {
+		this.headerRender = r
+	}
+}
+
+func (this *AppLayout) GetContextRender() IRender {
+	return this.contextRender
+}
+func (this *AppLayout) SetContextRender(r IRender) {
+	if r == nil {
+		this.contextRender = RenderNothing
+	} else {
+		this.contextRender = r
+	}
+}
+
+func (this *AppLayout) GetFooterRender() IRender {
+	return this.footerRender
+}
+func (this *AppLayout) SetFooterRender(r IRender) {
+	if r == nil {
+		this.footerRender = RenderNothing
+	} else {
+		this.footerRender = r
+	}
+}
+
+func (this *AppLayout) GetBottomRender() IRender {
+	return this.bottomRender
+}
+func (this *AppLayout) SetBottomRender(r IRender) {
+	if r == nil {
+		this.bottomRender = RenderNothing
+	} else {
+		this.bottomRender = r
+	}
+}
+
+func (this *AppLayout) GetHeadLayout() *HeadLayout {
+	return this.headLayout
+}
 func (this *AppLayout) SetHeadLayout(h *HeadLayout) {
 	this.headLayout = h
 }
 
 func (this *AppLayout) RenderLayout(writer io.Writer) {
+	if this.RenderFunc != nil {
+		this.RenderFunc(this, writer)
+		return
+	}
 	writer.Write([]byte("<!DOCTYPE HTML>\n<html>\n"))
 	this.headLayout.RenderLayout(writer)
 	writer.Write([]byte("<body>\n"))

@@ -23,10 +23,10 @@ type TemplateRender struct {
 func (this *TemplateRender) Render(w io.Writer) {
 	defer func() {
 		if err := recover(); err != nil {
-			panic("template not found: " + httpServer.StaticDir + this.View.GetPath() + ".htm")
+			panic("template not found: " + httpServer.WebRoot + this.View.GetPath() + ".htm")
 		}
 	}()
-	filepath := httpServer.StaticDir + this.View.GetPath() + ".htm"
+	filepath := httpServer.WebRoot + this.View.GetPath() + ".htm"
 
 	tmpl, _ := template.ParseFiles(filepath)
 	err := tmpl.Execute(w, this.Data)

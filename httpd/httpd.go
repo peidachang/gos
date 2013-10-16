@@ -1,20 +1,21 @@
 package httpd
 
 import (
+	"bytes"
+	"code.google.com/p/go.net/websocket"
 	"encoding/json"
 	"fmt"
 	"github.com/jiorry/gos/cache"
 	"github.com/jiorry/gos/conf"
 	"github.com/jiorry/gos/db"
+	"github.com/jiorry/gos/httpd/websock"
 	"github.com/jiorry/gos/log"
-	"github.com/jiorry/gos/util"
 	"io"
 	"net"
 	"net/http"
 	"net/http/fcgi"
 	"os"
 	"reflect"
-	"strings"
 )
 
 type HttpServer struct {
@@ -24,12 +25,13 @@ type HttpServer struct {
 	PprofOn    bool
 	GlobalData db.DataRow
 
-	StaticDir string
+	WebRoot   string
 	Timestamp string
 
-	EnablePing   bool
-	EnableUpload bool
-	EnableApi    bool
+	EnablePing      bool
+	EnableUpload    bool
+	EnableApi       bool
+	EnableWebSocket bool
 
 	UseFcgi   bool
 	lenStatic int
@@ -44,17 +46,22 @@ var (
 	RunMode    string //"dev" or "prod"
 )
 
+var BDATA_DOT []byte = []byte(".")
+var BDATA_HTML_SUBFIX []byte = []byte(".html")
+var BDATA_SLASH []byte = []byte("/")
+
 func init() {
 	httpServer = &HttpServer{
-		Addr:         "",
-		Port:         8800,
-		StaticDir:    "static",
-		PprofOn:      false,
-		EnableGzip:   false,
-		EnablePing:   false,
-		EnableUpload: true,
-		EnableApi:    true,
-		UseFcgi:      false,
+		Addr:            "",
+		Port:            8080,
+		WebRoot:         "webroot",
+		PprofOn:         false,
+		EnableGzip:      false,
+		EnablePing:      false,
+		EnableUpload:    true,
+		EnableApi:       true,
+		EnableWebSocket: false,
+		UseFcgi:         false,
 	}
 
 	HomeUrl = "/"
@@ -101,8 +108,8 @@ func Init() {
 		AssetsName = appConf.GetString("assets")
 	}
 
-	if httpConf.IsSet("static") {
-		httpServer.StaticDir = httpConf.GetString("static")
+	if httpConf.IsSet("webroot") {
+		httpServer.WebRoot = httpConf.GetString("webroot")
 	}
 
 	if httpConf.IsSet("timestamp") {
@@ -126,19 +133,16 @@ func Init() {
 	}
 
 	httpServer.UseFcgi = httpConf.GetBool("fcgi")
-	httpServer.lenStatic = len(httpServer.StaticDir)
+	httpServer.lenStatic = len(httpServer.WebRoot)
 	httpServer.PprofOn = httpConf.GetBool("pprof")
 	httpServer.EnableGzip = httpConf.GetBool("gzip")
-	httpServer.EnableApi = httpConf.GetBool("enable_api")
-	httpServer.EnableUpload = httpConf.GetBool("enable_upload")
-	httpServer.EnablePing = httpConf.GetBool("enable_ping")
 
 	if appConf.IsSet("theme") {
 		SiteTheme = appConf.GetString("theme")
 	}
 
 	if conf.IsSet("db") {
-		db.New("app", map[string]string(conf["db"]))
+		db.Init("app", map[string]string(conf["db"]))
 	}
 	if conf.IsSet("cache") {
 		cache.Init(conf["cache"])
@@ -177,13 +181,16 @@ func addHander() {
 	}
 
 	if httpServer.EnableApi {
-		http.HandleFunc("/api/", webserviceHander)
+		http.HandleFunc("/api/", webapiHander)
 	}
 
 	if httpServer.EnableUpload {
 		http.HandleFunc("/upload/", uploadHander)
 	}
 
+	if httpServer.EnableWebSocket {
+		http.Handle("/ws/", websocket.Handler(websocketHander))
+	}
 	http.HandleFunc("/", serveHTTPHander)
 }
 
@@ -199,14 +206,9 @@ func pingHander(rw http.ResponseWriter, req *http.Request) {
 	rw.Write([]byte("ok"))
 }
 
-// func staticHander(rw http.ResponseWriter, req *http.Request) {
-// 	log.App.Info("static:", req.URL.Path)
-// 	http.ServeFile(rw, req, "."+req.URL.Path)
-// }
-
 func uploadHander(rw http.ResponseWriter, req *http.Request) {
 	var routeMatched *RouteMatched
-	if routeMatched = MatchFileuploadRoute(req.URL.Path); routeMatched == nil {
+	if routeMatched = MatchFileuploadRoute([]byte(req.URL.Path)); routeMatched == nil {
 		http.Error(rw, "File Upload Page Not Found!", 404)
 		return
 	}
@@ -221,47 +223,63 @@ func uploadHander(rw http.ResponseWriter, req *http.Request) {
 	prt := reflect.New(routeMatched.ClassType)
 	ctx := buildContext(rw, req, routeMatched)
 
-	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
+	prt.MethodByName("Prepare").Call([]reflect.Value{reflect.ValueOf(ctx), prt})
 	prt.MethodByName("InitData").Call(nil)
 	prt.MethodByName("DoUpload").Call(nil)
 }
 
-func webserviceHander(rw http.ResponseWriter, req *http.Request) {
-	log.App.Info("webservice:", req.URL.Path)
+func websocketHander(ws *websocket.Conn) {
+	log.App.Info("websocket:", ws.RemoteAddr())
+	req := ws.Request()
+	var routeMatched *RouteMatched
+	if routeMatched = MatchWebSocketRoute([]byte(req.URL.Path)); routeMatched == nil {
+		ws.Close()
+		return
+	}
+
+	prt := reflect.New(routeMatched.ClassType)
+	s := websock.GetServer(routeMatched.ClassType.String())
+	if s == nil {
+		ws.Close()
+		return
+	}
+
+	prt.MethodByName("Prepare").Call([]reflect.Value{reflect.ValueOf(ws), prt, reflect.ValueOf(s)})
+	if isDie(prt.MethodByName("Init").Call(nil)) {
+		return
+	}
+	prt.MethodByName("Listen").Call(nil)
+}
+
+func webapiHander(rw http.ResponseWriter, req *http.Request) {
+	log.App.Info("webapi:", req.URL.Path)
 
 	var routeMatched *RouteMatched
-	if routeMatched = MatchWebServiceRoute(req.URL.Path); routeMatched == nil {
+	if routeMatched = MatchWebApiRoute([]byte(req.URL.Path)); routeMatched == nil {
 		http.Error(rw, "Api Not Found!", 404)
 		return
 	}
 	prt := reflect.New(routeMatched.ClassType)
 	ctx := buildContext(rw, req, routeMatched)
-	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
+	prt.MethodByName("Prepare").Call([]reflect.Value{reflect.ValueOf(ctx), prt})
 
 	if len(req.PostForm["json"]) == 0 {
-		MyErr(0, "miss parameters!").Write(rw)
+		NewError(0, "miss parameters!").Write(rw)
 		return
 	}
 
-	data := &WSParams{}
+	data := &ApiParams{}
 	if err := json.Unmarshal([]byte(req.PostForm["json"][0]), data); err != nil {
-		MyErr(0, err.Error()).Write(rw)
+		NewError(0, err.Error()).Write(rw)
 		return
 	}
 
-	prt.MethodByName("Init").Call(nil)
-	requireAuth := prt.Elem().FieldByName("RequireAuth").Bool()
-	publicFuncs := prt.Elem().FieldByName("PublicFunctions").Interface().([]string)
-
-	if requireAuth && !util.InStringArray(publicFuncs, data.Method) {
-		if val := prt.MethodByName("IsAuth").Call(nil); !val[0].Bool() {
-			ctx.ResponseWriter.Write([]byte(MyErr(1, "user authrize failed!").Json()))
-			return
-		}
+	if isDie(prt.MethodByName("Init").Call(nil)) {
+		return
 	}
 
 	if prt.MethodByName(data.Method).Kind() == reflect.Invalid {
-		MyErr(0, "invalid method:"+data.Method).Write(rw)
+		NewError(0, "invalid method:"+data.Method).Write(rw)
 		//ctx.Exit(500, "invalid function call")
 		return
 	}
@@ -283,13 +301,16 @@ func webserviceHander(rw http.ResponseWriter, req *http.Request) {
 
 func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 	log.App.Info(req.URL.Path)
+	bPath := []byte(req.URL.Path)
+	bWebRoot := []byte(httpServer.WebRoot)
 
 	var routeMatched *RouteMatched
-	if routeMatched = MatchRoute(req.URL.Path); routeMatched == nil {
-		if strings.ContainsRune(req.URL.Path, '.') {
-			http.ServeFile(rw, req, httpServer.StaticDir+req.URL.Path)
+	if routeMatched = MatchRoute(bPath); routeMatched == nil {
+		if bytes.Contains(bPath, BDATA_DOT) {
+			http.ServeFile(rw, req, string(append(bWebRoot, bPath...)))
 		} else {
-			http.ServeFile(rw, req, httpServer.StaticDir+req.URL.Path+".html")
+			b := append(bWebRoot, bPath...)
+			http.ServeFile(rw, req, string(append(b, BDATA_HTML_SUBFIX...)))
 		}
 		// http.Error(rw, "Page Not Found!", 404)
 		return
@@ -297,16 +318,20 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 
 	ctx := buildContext(rw, req, routeMatched)
 	prt := reflect.New(routeMatched.ClassType)
-	prt.MethodByName("SetContext").Call([]reflect.Value{reflect.ValueOf(ctx)})
+
+	prt.MethodByName("SetView").Call([]reflect.Value{reflect.ValueOf(routeMatched.ClassType.Name())})
+	prt.MethodByName("Prepare").Call([]reflect.Value{reflect.ValueOf(ctx), prt})
 
 	doCache := false
-	v := prt.MethodByName("CheckPageCache").Call(nil)
+	v := prt.MethodByName("CheckCache").Call(nil)
 
 	switch int(v[0].Int()) {
 	case CACHE_FOUND:
 		return
 	case CACHE_NOT_FOUND:
 		doCache = true
+		// default:
+		// 	CACHE_DISABLED
 	}
 
 	if isDie(prt.MethodByName("Init").Call(nil)) {
@@ -324,7 +349,7 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if isDie(prt.MethodByName("After").Call(nil)) {
+	if isDie(prt.MethodByName("Action").Call(nil)) {
 		return
 	}
 
@@ -337,15 +362,14 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 }
 
 func buildContext(rw http.ResponseWriter, req *http.Request, routeMatched *RouteMatched) *Context {
-
 	if req.Method == "POST" {
 		req.ParseForm()
 	}
 
-	return &Context{ResponseWriter: rw, Request: req, RouterParams: routeMatched.Params}
+	return &Context{ResponseWriter: rw, Request: req, routerParams: routeMatched.Params}
 }
 
-func MyErr(code int, messages ...interface{}) *MyError {
+func NewError(code int, messages ...interface{}) *MyError {
 	return &MyError{Code: code, Messages: messages}
 }
 

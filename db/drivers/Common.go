@@ -4,14 +4,18 @@ type Common struct {
 	connect string
 }
 
-func (this *Common) SetConnectString(s string) {
-	this.connect = s
+func (c *Common) SetConnectString(s string) {
+	c.connect = s
 }
 
-func (this *Common) ConnectString() string {
-	return this.connect
+func (c *Common) ConnectString() string {
+	return c.connect
 }
 
-func (this *Common) QuoteField(s string) string {
+func (c *Common) QuoteField(s string) string {
 	return `"` + s + `"`
+}
+
+func (c *Common) LastInsertId(table, pkey string) string {
+	return ""
 }

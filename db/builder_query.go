@@ -119,6 +119,7 @@ func (this *QueryBuilder) parse() []byte {
 }
 
 func (this *QueryBuilder) Query() (DataSet, error) {
+	database := this.GetDatabase()
 	var key []byte
 	if this.cache && cache.IsEnable() {
 		key = this.cachekey()
@@ -128,18 +129,18 @@ func (this *QueryBuilder) Query() (DataSet, error) {
 	}
 	var r DataSet
 	var err error
-	sql := string(this.parse())
+	sql := this.parse()
 	if this.where == nil {
 		if this.dataStruct == nil {
-			r, err = this.GetDatabase().QueryPrepare(sql)
+			r, err = database.QueryPrepare(sql)
 		} else {
-			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, sql)
+			r, err = database.QueryPrepareX(this.dataStruct, sql)
 		}
 	} else {
 		if this.dataStruct == nil {
-			r, err = this.GetDatabase().QueryPrepare(sql, this.where.args...)
+			r, err = database.QueryPrepare(sql, this.where.args...)
 		} else {
-			r, err = this.GetDatabase().QueryPrepareX(this.dataStruct, sql, this.where.args...)
+			r, err = database.QueryPrepareX(this.dataStruct, sql, this.where.args...)
 		}
 	}
 
@@ -172,10 +173,28 @@ func (this *QueryBuilder) QueryOne() (DataRow, error) {
 	return row, nil
 }
 
-func (this *QueryBuilder) Exists(s string, args ...interface{}) (bool, error) {
-	this.where = &parpareParams{s, args}
-	this.field = "1"
-	r, err := this.Query()
+func (this *QueryBuilder) Exists(where string, args ...interface{}) (bool, error) {
+	database := this.GetDatabase()
+
+	s := bytes.Buffer{}
+	s.WriteString("select 1 as field from ")
+	s.WriteString(database.Driver.QuoteField(this.table))
+
+	if where != "" {
+		s.WriteString(" where ")
+		s.WriteString(where)
+	}
+
+	s.WriteString(" limit 1")
+
+	var r DataSet
+	var err error
+	if len(args) == 0 {
+		r, err = database.QueryPrepare(s.Bytes())
+	} else {
+		r, err = database.QueryPrepare(s.Bytes(), args...)
+	}
+
 	return len(r) > 0, err
 }
 

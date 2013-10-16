@@ -1,6 +1,7 @@
 package httpd
 
 import (
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -10,7 +11,7 @@ import (
 
 type Context struct {
 	ResponseWriter http.ResponseWriter
-	RouterParams   map[string]string
+	routerParams   map[string]string
 	Request        *http.Request
 }
 
@@ -23,11 +24,11 @@ func (ctx *Context) Exit(code int, body string) {
 	ctx.ResponseWriter.Write([]byte(body))
 }
 
-func (ctx *Context) Redirect(urlStr string) {
+func (ctx *Context) Redirect(urlStr string, args ...interface{}) {
 	// ctx.ResponseWriter.Header().Set("Location", urlStr)
 	// ctx.ResponseWriter.WriteHeader(302)
 
-	http.Redirect(ctx.ResponseWriter, ctx.Request, urlStr, http.StatusSeeOther)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, fmt.Sprintf(urlStr, args...), http.StatusSeeOther)
 }
 
 func (ctx *Context) NotModified() {
@@ -71,13 +72,21 @@ func (ctx *Context) SetCookie(name string, value string, age int64, path string,
 	http.SetCookie(ctx.ResponseWriter, cookie)
 }
 
-func (ctx *Context) CheckLogin(path string) bool {
+func (ctx *Context) CheckLogin(loginUrl string) bool {
 	if auth := (&UserAuth{}).SetContext(ctx); auth.NotOk() {
 		auth.ClearCookie()
-		ctx.Redirect(path + "?redirect=" + ctx.Request.URL.RequestURI())
+		ctx.Redirect(loginUrl + "?redirect=" + ctx.Request.URL.RequestURI())
 		return false
 	}
 	return true
+}
+
+func (ctx *Context) RouterParam(key string) string {
+	if v, ok := ctx.routerParams[key]; ok {
+		return v
+	} else {
+		return ""
+	}
 }
 
 func webTime(t time.Time) string {
