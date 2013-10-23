@@ -7,9 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/jiorry/gos/db"
-	"github.com/jiorry/gos/lib"
-	"github.com/jiorry/gos/util"
+	"github.com/jiorry/db"
+	"github.com/jiorry/libs/crypto"
+	"github.com/jiorry/libs/util"
 	"strconv"
 	"strings"
 	"time"
@@ -117,7 +117,7 @@ func (this *UserAuth) Auth(cipher []byte) (string, error) {
 		return "", NewError(0, "user auth is overdue").Log("notice")
 	}
 
-	user := this.Find(login)
+	user := this.Query(login)
 	if user == nil {
 		return login, NewError(0, "login not found").Log("notice")
 	}
@@ -139,11 +139,11 @@ func (this *UserAuth) Auth(cipher []byte) (string, error) {
 	return login, nil
 }
 
-func (this *UserAuth) Find(login string) db.DataRow {
+func (this *UserAuth) Query(login string) db.DataRow {
 	find := (&db.QueryBuilder{}).Table(this.VO.Table).Where(this.VO.FieldNick+"=?", login).Cache(300)
 
 	row, err := find.QueryOne()
-	if err != nil {
+	if row == nil || err != nil {
 		return nil
 	}
 
@@ -161,13 +161,24 @@ func (this *UserAuth) SetCookie(age int64) {
 		unix = ts + age
 	}
 
-	this.ctx.SetCookie(this.VO.CookieKey, fmt.Sprintf("%s|%d|%s", this.Nick(), ts, this.createAuthToken(this.Nick(), ts, this.user[this.VO.FieldToken].(string), privateSecret)), unix, "/", "", true)
+	this.ctx.SetCookie(this.VO.CookieKey, fmt.Sprintf("%s|%d|%s", this.Nick(), ts, this.createAuthToken(this.Nick(), ts, this.user.GetString(this.VO.FieldToken), privateSecret)), unix, "/", "", true)
 	this.ctx.SetCookie(this.VO.CookiePublicKey, fmt.Sprint(this.Nick(), "|", this.GroupId), unix, "/", "", false)
 }
 
 func (this *UserAuth) ClearCookie() {
 	this.ctx.SetCookie(this.VO.CookieKey, "", -1, "/", "", true)
 	this.ctx.SetCookie(this.VO.CookiePublicKey, "", -1, "/", "", false)
+}
+
+func (this *UserAuth) CheckLogin(successUrl string) bool {
+	if this.NotOk() {
+		this.ClearCookie()
+		if successUrl != "" {
+			this.ctx.Redirect(successUrl + "?redirect=" + this.ctx.Request.URL.RequestURI())
+		}
+		return false
+	}
+	return true
 }
 
 func (this *UserAuth) IsOk() bool {
@@ -211,11 +222,11 @@ func (this *UserAuth) CurrentUser() db.DataRow {
 	}
 
 	login := arr[0]
-	this.user = this.Find(login)
+	this.user = this.Query(login)
 	n, _ := strconv.Atoi(arr[1])
 	ts := int64(n)
 
-	if this.user == nil || arr[2] != this.createAuthToken(login, ts, this.user[this.VO.FieldToken].(string), privateSecret) {
+	if this.user == nil || arr[2] != this.createAuthToken(login, ts, this.user.GetString(this.VO.FieldToken), privateSecret) {
 		this.user = nil
 	}
 
@@ -258,7 +269,7 @@ func (this *UserAuth) PraseCipher(cipher []byte) (int64, []byte, error) {
 		return 0, nil, NewError(0, "login ts is exprie").Log("error")
 	}
 
-	b := lib.AESDecrypt(code[8:24], aeskey[0:16], code[24:])
+	b := crypto.AESDecrypt(code[8:24], aeskey[0:16], code[24:])
 
 	n := bytes.Index(b, []byte("-"))
 	l, err := strconv.Atoi(string(b[0:n]))
@@ -274,8 +285,10 @@ func (this *UserAuth) Regist(login string, email string, cipher string) error {
 		return NewError(0, "login or email is empty")
 	}
 
-	find := (&db.QueryBuilder{}).Table(this.VO.Table)
-	if isExist, _ := find.Exists(this.VO.FieldNick+"=? or "+this.VO.FieldEmail+"=?", login, email); isExist {
+	e := (&db.ExistsBuilder{}).
+		Table(this.VO.Table).
+		Where(this.VO.FieldNick+"=? or "+this.VO.FieldEmail+"=?", login, email)
+	if isExist, _ := e.Exists(); isExist {
 		return NewError(0, "login or email exists")
 	}
 
@@ -285,8 +298,11 @@ func (this *UserAuth) Regist(login string, email string, cipher string) error {
 	}
 	salt := util.Unique()
 	err = this.RegistFunc(salt, this.GenerateUserToken(login, string(text), salt))
+	if err != nil {
+		return err
+	}
 
-	u := this.Find(login)
+	u := this.Query(login)
 	if u == nil {
 		return NewError(0, "user is empty")
 	} else {

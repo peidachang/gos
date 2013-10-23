@@ -5,11 +5,11 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"encoding/json"
 	"fmt"
-	"github.com/jiorry/gos/cache"
-	"github.com/jiorry/gos/conf"
-	"github.com/jiorry/gos/db"
-	"github.com/jiorry/gos/httpd/websock"
-	"github.com/jiorry/gos/log"
+	"github.com/jiorry/db"
+	"github.com/jiorry/gos/websock"
+	"github.com/jiorry/libs/cache"
+	"github.com/jiorry/libs/conf"
+	"github.com/jiorry/libs/log"
 	"io"
 	"net"
 	"net/http"
@@ -45,10 +45,6 @@ var (
 	SiteTheme  string
 	RunMode    string //"dev" or "prod"
 )
-
-var BDATA_DOT []byte = []byte(".")
-var BDATA_HTML_SUBFIX []byte = []byte(".html")
-var BDATA_SLASH []byte = []byte("/")
 
 func init() {
 	httpServer = &HttpServer{
@@ -306,11 +302,11 @@ func serveHTTPHander(rw http.ResponseWriter, req *http.Request) {
 
 	var routeMatched *RouteMatched
 	if routeMatched = MatchRoute(bPath); routeMatched == nil {
-		if bytes.Contains(bPath, BDATA_DOT) {
+		if bytes.Contains(bPath, B_DOT) {
 			http.ServeFile(rw, req, string(append(bWebRoot, bPath...)))
 		} else {
 			b := append(bWebRoot, bPath...)
-			http.ServeFile(rw, req, string(append(b, BDATA_HTML_SUBFIX...)))
+			http.ServeFile(rw, req, string(append(b, B_HTML_SUBFIX...)))
 		}
 		// http.Error(rw, "Page Not Found!", 404)
 		return

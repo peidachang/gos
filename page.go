@@ -2,19 +2,11 @@ package httpd
 
 import (
 	"bytes"
-	"github.com/jiorry/gos/log"
-	"github.com/jiorry/gos/util"
+	"github.com/jiorry/libs/log"
+	"github.com/jiorry/libs/util"
 	"net/http"
 	"os"
 	"reflect"
-)
-
-var RenderNothing = &EmptyRender{}
-
-const (
-	CACHE_NOT_FOUND int = 0
-	CACHE_FOUND     int = 1
-	CACHE_DISABLED  int = -1
 )
 
 type PageCache struct {
@@ -25,8 +17,8 @@ type Page struct {
 	View  *ThemeItem
 	Title string
 	Head  []string
-	Js    ThemeItems
-	Css   ThemeItems
+	Js    []*ThemeItem
+	Css   []*ThemeItem
 
 	Timestamp   string
 	JsPosition  string // head or end
@@ -37,10 +29,22 @@ type Page struct {
 	Data   interface{}
 	Layout *AppLayout
 	parent interface{}
+	auth   *UserAuth
 }
 
 type IPage interface {
 	ToStaticFile()
+}
+
+func (p *Page) SetUserAuth(u *UserAuth) {
+	p.auth = u
+}
+
+func (p *Page) GetUserAuth() *UserAuth {
+	if p.auth == nil {
+		p.auth = (&UserAuth{}).SetContext(p.Ctx)
+	}
+	return p.auth
 }
 
 func (p *Page) SetData(d interface{}) {
@@ -48,12 +52,12 @@ func (p *Page) SetData(d interface{}) {
 }
 
 func (p *Page) SetView(viewName string) *Page {
-	p.View = &ThemeItem{"", "template", viewName}
+	p.View = &ThemeItem{"", "template", viewName, nil}
 	return p
 }
 
 func (p *Page) SetThemeView(theme string, viewName string) *Page {
-	p.View = &ThemeItem{theme, "template", viewName}
+	p.View = &ThemeItem{theme, "template", viewName, nil}
 	return p
 }
 
@@ -62,10 +66,15 @@ func (p *Page) AddHead(items ...string) *Page {
 	return p
 }
 
+func (p *Page) AddJsThemeItem(theme, value string, data map[string]string) *Page {
+	p.Js = append(p.Js, &ThemeItem{theme, "js", value, data})
+	return p
+}
+
 func (p *Page) AddThemeJs(theme string, items ...string) *Page {
 	arr := make([]*ThemeItem, len(items))
 	for i, _ := range items {
-		arr[i] = &ThemeItem{theme, "js", items[i]}
+		arr[i] = &ThemeItem{theme, "js", items[i], nil}
 	}
 	p.Js = append(p.Js, arr...)
 	return p
@@ -77,7 +86,7 @@ func (p *Page) AddJs(items ...string) *Page {
 func (p *Page) AddThemeCss(theme string, items ...string) *Page {
 	arr := make([]*ThemeItem, len(items))
 	for i, _ := range items {
-		arr[i] = &ThemeItem{theme, "css", items[i]}
+		arr[i] = &ThemeItem{theme, "css", items[i], nil}
 	}
 	p.Css = append(p.Css, arr...)
 	return p
@@ -92,8 +101,8 @@ func (p *Page) Prepare(ct *Context, parent interface{}) {
 	p.parent = parent
 
 	p.Cache = &PageCache{"none", 0}
-	p.Js = ThemeItems{}
-	p.Css = ThemeItems{}
+	p.Js = make([]*ThemeItem, 0)
+	p.Css = make([]*ThemeItem, 0)
 	p.JsPosition = "head"
 	p.Head = []string{`<meta charset="utf-8">`}
 
@@ -230,6 +239,7 @@ func (p *Page) Action() {}
 
 type ThemeItem struct {
 	Theme, Folder, Value string
+	Data                 map[string]string
 }
 
 func (th *ThemeItem) GetPath() string {
@@ -244,8 +254,6 @@ func (th *ThemeItem) GetAssetsPath() string {
 	}
 	return "/themes/" + th.Theme + "/" + AssetsName + "/" + th.Folder + "/" + th.Value
 }
-
-type ThemeItems []*ThemeItem
 
 func StaticFiles(pages []IPage) {
 	defer func() {

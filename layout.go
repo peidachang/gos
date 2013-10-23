@@ -17,22 +17,22 @@ type AppLayout struct {
 
 func (this *AppLayout) TopView(theme string, name string, data interface{}) {
 	this.topRender = &TemplateRender{
-		View: &ThemeItem{theme, "template", name},
+		View: &ThemeItem{theme, "template", name, nil},
 		Data: data}
 }
 func (this *AppLayout) HeaderView(theme string, name string, data interface{}) {
 	this.headerRender = &TemplateRender{
-		View: &ThemeItem{theme, "template", name},
+		View: &ThemeItem{theme, "template", name, nil},
 		Data: data}
 }
 func (this *AppLayout) FooterView(theme string, name string, data interface{}) {
 	this.footerRender = &TemplateRender{
-		View: &ThemeItem{theme, "template", name},
+		View: &ThemeItem{theme, "template", name, nil},
 		Data: data}
 }
 func (this *AppLayout) BottomView(theme string, name string, data interface{}) {
 	this.bottomRender = &TemplateRender{
-		View: &ThemeItem{theme, "template", name},
+		View: &ThemeItem{theme, "template", name, nil},
 		Data: data}
 }
 
@@ -103,9 +103,9 @@ func (this *AppLayout) RenderLayout(writer io.Writer) {
 		this.RenderFunc(this, writer)
 		return
 	}
-	writer.Write([]byte("<!DOCTYPE HTML>\n<html>\n"))
+	writer.Write(B_HTML_BEGIN)
 	this.headLayout.RenderLayout(writer)
-	writer.Write([]byte("<body>\n"))
+	writer.Write(B_HTML_BODY_BEGIN)
 	this.topRender.Render(writer)
 	this.headerRender.Render(writer)
 	this.contextRender.Render(writer)
@@ -113,7 +113,8 @@ func (this *AppLayout) RenderLayout(writer io.Writer) {
 	this.bottomRender.Render(writer)
 	this.headLayout.RenderBottomJs(writer)
 
-	writer.Write([]byte("\n</body>\n</html>"))
+	writer.Write(B_HTML_BODY_END)
+	writer.Write(B_HTML_END)
 }
 
 type HeadLayout struct {

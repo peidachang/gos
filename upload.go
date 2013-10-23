@@ -2,7 +2,7 @@ package httpd
 
 import (
 	"errors"
-	"github.com/jiorry/gos/util"
+	"github.com/jiorry/libs/util"
 	"io"
 	"mime/multipart"
 	"os"

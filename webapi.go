@@ -2,7 +2,7 @@ package httpd
 
 import (
 	"encoding/json"
-	"github.com/jiorry/gos/log"
+	"github.com/jiorry/libs/log"
 )
 
 type ApiParams struct {

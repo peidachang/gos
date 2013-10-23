@@ -72,15 +72,6 @@ func (ctx *Context) SetCookie(name string, value string, age int64, path string,
 	http.SetCookie(ctx.ResponseWriter, cookie)
 }
 
-func (ctx *Context) CheckLogin(loginUrl string) bool {
-	if auth := (&UserAuth{}).SetContext(ctx); auth.NotOk() {
-		auth.ClearCookie()
-		ctx.Redirect(loginUrl + "?redirect=" + ctx.Request.URL.RequestURI())
-		return false
-	}
-	return true
-}
-
 func (ctx *Context) RouterParam(key string) string {
 	if v, ok := ctx.routerParams[key]; ok {
 		return v

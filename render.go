@@ -5,6 +5,13 @@ import (
 	"io"
 )
 
+var (
+	b_JS_TAG_BEGIN  = []byte("<script src=\"")
+	b_JS_TAG_END    = []byte("\"></script>\n")
+	b_CSS_TAG_BEGIN = []byte("<link href=\"")
+	b_CSS_TAG_END   = []byte("\" rel=\"stylesheet\"/>\n")
+)
+
 type IRender interface {
 	Render(io.Writer)
 }
@@ -48,25 +55,38 @@ func (this *HeadItemRender) Render(w io.Writer) {
 
 // JsRender
 type JsRender struct {
-	Theme *ThemeItem
-	Data  []*ThemeItem
+	Data []*ThemeItem
 }
 
 func (this *JsRender) Render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<script src=\"" + StaticUrl + v.GetAssetsPath() + httpServer.Timestamp + "\"></script>\n"))
+		w.Write(b_JS_TAG_BEGIN)
+		w.Write([]byte(StaticUrl + v.GetAssetsPath() + httpServer.Timestamp))
+		w.Write(B_QUOTE)
+		if v.Data != nil {
+			for k, val := range v.Data {
+				w.Write(B_SPACE)
+				w.Write([]byte(k))
+				w.Write(B_EQUAL)
+				w.Write(B_QUOTE)
+				w.Write([]byte(val))
+				w.Write(B_QUOTE)
+			}
+		}
+		w.Write(b_JS_TAG_END)
 	}
 }
 
 // CssRender
 type CssRender struct {
-	Theme *ThemeItem
-	Data  []*ThemeItem
+	Data []*ThemeItem
 }
 
 func (this *CssRender) Render(w io.Writer) {
 	for _, v := range this.Data {
-		w.Write([]byte("<link href=\"" + StaticUrl + v.GetAssetsPath() + httpServer.Timestamp + "\" rel=\"stylesheet\"/>\n"))
+		w.Write(b_CSS_TAG_BEGIN)
+		w.Write([]byte(StaticUrl + v.GetAssetsPath() + httpServer.Timestamp))
+		w.Write(b_CSS_TAG_END)
 	}
 }
 

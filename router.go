@@ -2,8 +2,8 @@ package httpd
 
 import (
 	"bytes"
-	"github.com/jiorry/gos/httpd/websock"
-	"github.com/jiorry/gos/log"
+	"github.com/jiorry/gos/websock"
+	"github.com/jiorry/libs/log"
 	"html"
 	"reflect"
 	"regexp"
@@ -16,10 +16,12 @@ var upRoutes []*Route = make([]*Route, 0)
 var wsRoutes []*Route = make([]*Route, 0)
 
 type Route struct {
-	ClassType reflect.Type
-	Rule      []byte
-	Pattern   *regexp.Regexp // for matching the url path
-	Keys      []string
+	ClassType     reflect.Type
+	Rule          []byte
+	Pattern       *regexp.Regexp // for matching the url path
+	Keys          []string
+	beforeFilters []func(ctx *Context) bool
+	afterFilters  []func(ctx *Context) bool
 }
 
 type RouteMatched struct {
@@ -27,7 +29,7 @@ type RouteMatched struct {
 	Params    map[string]string
 }
 
-func AddRoute(rule string, clas interface{}) {
+func AddRoute(rule string, clas interface{}) *Route {
 	switch rule {
 	case "/upload":
 		log.App.Alert("/upload is used for default upload router")
@@ -38,7 +40,7 @@ func AddRoute(rule string, clas interface{}) {
 	case "/ws":
 		log.App.Alert("/ws is used for default websocket router")
 	}
-	addRouteTo(rule, clas, 0)
+	return addRouteTo(rule, clas, 0)
 }
 
 func MatchRoute(path []byte) *RouteMatched {
@@ -121,8 +123,8 @@ func addRouteTo(rule string, clas interface{}, itype int) *Route {
 }
 
 func searchPathFrom(path []byte, fromRoutes []*Route) *RouteMatched {
-	if bytes.HasSuffix(path, BDATA_SLASH) {
-		path = bytes.TrimSuffix(path, BDATA_SLASH)
+	if bytes.HasSuffix(path, B_SLASH) {
+		path = bytes.TrimSuffix(path, B_SLASH)
 	}
 	for _, route := range fromRoutes {
 		if bytes.Equal(path, route.Rule) {
@@ -145,8 +147,8 @@ func matchRoute(path []byte, itype int) *RouteMatched {
 	for _, route = range items {
 		if route.Pattern == nil {
 			// fix route
-			if bytes.HasSuffix(path, BDATA_SLASH) {
-				path = bytes.TrimSuffix(path, BDATA_SLASH)
+			if bytes.HasSuffix(path, B_SLASH) {
+				path = bytes.TrimSuffix(path, B_SLASH)
 			}
 			if bytes.Equal(path, route.Rule) {
 				return &RouteMatched{ClassType: route.ClassType, Params: nil}
