@@ -98,6 +98,12 @@ func (this *AppLayout) SetHeadLayout(h *HeadLayout) {
 	this.headLayout = h
 }
 
+var (
+	b_s1 = []byte("\n<script>var MYENV='")
+	b_s2 = []byte("',THEME='")
+	b_s3 = []byte("'</script>")
+)
+
 func (this *AppLayout) RenderLayout(writer io.Writer) {
 	if this.RenderFunc != nil {
 		this.RenderFunc(this, writer)
@@ -111,6 +117,11 @@ func (this *AppLayout) RenderLayout(writer io.Writer) {
 	this.contextRender.Render(writer)
 	this.footerRender.Render(writer)
 	this.bottomRender.Render(writer)
+	writer.Write(b_s1)
+	writer.Write([]byte(RunMode))
+	writer.Write(b_s2)
+	writer.Write([]byte(SiteTheme))
+	writer.Write(b_s3)
 	this.headLayout.RenderBottomJs(writer)
 
 	writer.Write(B_HTML_BODY_END)

@@ -11,9 +11,20 @@ type ApiParams struct {
 }
 
 type WebApi struct {
-	parent   interface{}
-	UserAuth *UserAuth
-	Ctx      *Context
+	parent interface{}
+	auth   *UserAuth
+	Ctx    *Context
+}
+
+func (w *WebApi) SetUserAuth(u *UserAuth) {
+	w.auth = u
+}
+
+func (w *WebApi) GetUserAuth() *UserAuth {
+	if w.auth == nil {
+		w.auth = (&UserAuth{}).SetContext(w.Ctx)
+	}
+	return w.auth
 }
 
 func (w *WebApi) Prepare(ctx *Context, p interface{}) {

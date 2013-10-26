@@ -114,7 +114,6 @@ func (p *Page) Prepare(ct *Context, parent interface{}) {
 		contextRender: RenderNothing,
 		footerRender:  RenderNothing,
 		bottomRender:  RenderNothing}
-
 }
 
 func (p *Page) RenderPage() {

@@ -54,8 +54,8 @@ func init() {
 		PprofOn:         false,
 		EnableGzip:      false,
 		EnablePing:      false,
-		EnableUpload:    true,
-		EnableApi:       true,
+		EnableUpload:    false,
+		EnableApi:       false,
 		EnableWebSocket: false,
 		UseFcgi:         false,
 	}
