@@ -1,4 +1,4 @@
-package httpd
+package gos
 
 import (
 	"bytes"
@@ -20,9 +20,8 @@ type Page struct {
 	Js    []*ThemeItem
 	Css   []*ThemeItem
 
-	Timestamp   string
-	JsPosition  string // head or end
-	RequireAuth bool
+	Timestamp  string
+	JsPosition string // head or end
 
 	Cache  *PageCache
 	Ctx    *Context
@@ -230,7 +229,17 @@ func (p *Page) BuildLayout() *AppLayout {
 	return p.Layout
 }
 
-func (p *Page) Auth()   {}
+func (p *Page) SubDomain() string {
+	host := []byte(p.Ctx.Request.Host)
+	arr := bytes.Split(host, B_DOT)
+	l := len(arr)
+	if l < 2 {
+		return ""
+	}
+
+	return string(bytes.Join(arr[0:l-2], B_DOT))
+}
+
 func (p *Page) Init()   {}
 func (p *Page) Get()    {}
 func (p *Page) Post()   {}

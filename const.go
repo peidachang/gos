@@ -1,4 +1,4 @@
-package httpd
+package gos
 
 const (
 	CACHE_NOT_FOUND int = 0

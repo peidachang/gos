@@ -1,4 +1,4 @@
-package httpd
+package gos
 
 import (
 	"encoding/json"

@@ -1,4 +1,4 @@
-package httpd
+package gos
 
 import (
 	"bytes"
@@ -104,46 +104,64 @@ func (this *UserAuth) GenerateUserToken(login string, pwd string, salt string) s
 	return util.MD5String(login + salt + pwd + salt)
 }
 
-func (this *UserAuth) Auth(cipher []byte) (string, error) {
+func (this *UserAuth) Auth(ctype string, cipher []byte) (string, error) {
 	ts, b, err := this.PraseCipher(cipher)
 	if err != nil {
 		return "", err
 	}
+
 	arr := bytes.Split(b, separator)
-	login := string(arr[0])
+	loginString := string(arr[0])
 	pwd := string(arr[1])
 
 	if time.Now().Unix()-int64(ts) > 30 {
 		return "", NewError(0, "user auth is overdue").Log("notice")
 	}
-
-	user := this.Query(login)
-	if user == nil {
-		return login, NewError(0, "login not found").Log("notice")
+	var user db.DataRow
+	if ctype == "nick" {
+		user = this.Query(loginString)
+	} else {
+		user = this.QueryByEmail(loginString)
 	}
 
-	if user.GetString(this.VO.FieldToken) != this.GenerateUserToken(login, pwd, user.GetString(this.VO.FieldSalt)) {
+	if user == nil {
+		return loginString, NewError(0, loginString+" not found").Log("notice")
+	}
+
+	if user.GetString(this.VO.FieldToken) != this.GenerateUserToken(user.GetString(this.VO.FieldNick), pwd, user.GetString(this.VO.FieldSalt)) {
 		this.ClearCookie()
 		this.user = nil
-		return login, NewError(0, "login and password is not matched").Log("notice")
+		return loginString, NewError(0, "login failed").Log("notice")
 	}
 
 	this.user = user
 
 	data := db.DataRow{}
 	data[this.VO.FieldLastSee] = time.Now()
+
 	(&db.UpdateBuilder{}).Table(this.VO.Table).
 		Where(this.VO.FieldId+"=?", this.user.GetInt64(this.VO.FieldId)).
 		Update(data)
 
-	return login, nil
+	return loginString, nil
 }
 
 func (this *UserAuth) Query(login string) db.DataRow {
 	find := (&db.QueryBuilder{}).Table(this.VO.Table).Where(this.VO.FieldNick+"=?", login).Cache(300)
 
 	row, err := find.QueryOne()
-	if row == nil || err != nil {
+	if err != nil {
+		return nil
+	}
+
+	return row
+}
+
+func (this *UserAuth) QueryByEmail(email string) db.DataRow {
+	find := (&db.QueryBuilder{}).Table(this.VO.Table).Where(this.VO.FieldEmail+"=?", email).Cache(300)
+
+	row, err := find.QueryOne()
+	if err != nil {
 		return nil
 	}
 

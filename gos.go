@@ -1,4 +1,4 @@
-package httpd
+package gos
 
 import (
 	"bytes"
@@ -288,7 +288,7 @@ func webapiHander(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if len(result) != 2 {
-		log.App.Error("Web Service API Function must return (data, error)")
+		NewError(0, "Web Service API Function must return (data, error)").Write(rw)
 		return
 	}
 	prt.MethodByName("Reply").Call(result)
